@@ -4,11 +4,15 @@ from pydantic import BaseModel
 import json, random, re, os, base64, io, traceback
 from datetime import datetime
 from pathlib import Path
-import google.generativeai as genai
+try:
+    import google.generativeai as genai
+except Exception:
+    genai = None
 
-# ══ CẤU HÌNH - THAY KEY VÀO ĐÂY ══
-GEMINI_API_KEY = "AIzaSyB13ZOCY6jrufnZu7OLuN7zdbb7o00YF48"
-# ══════════════════════════════════
+# ══ CẤU HÌNH API KEY ══
+# Đặt biến môi trường GEMINI_API_KEY để chạy AI (tránh commit key lên GitHub).
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "YOUR_KEY_HERE")
+# ════════════════════
 
 app = FastAPI()
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
@@ -325,8 +329,8 @@ def parse_pdf(content: bytes) -> list:
     return all_questions
 
 # ══════════════════════════════════════════
-#  WORD PARSER — (SIÊU CẤP - XỬ LÝ BẢNG GỘP DÒNG)
-# ══════════════════════════════════════════
+# ════ WORD PARSER — (SIÊU CẤP - XỬ LÝ BẢNG GỘP DÒNG)
+# ══════════════════════════════════════
 
 def _parse_lines(lines):
     questions, cur = [], None
@@ -507,6 +511,9 @@ CHỈ TRẢ VỀ MẢNG JSON THUẦN (không markdown):
 ]"""
 
 def parse_with_gemini_ai(content: bytes, filetype: str, api_key: str) -> list:
+    if genai is None:
+        print("Thiếu thư viện google-generativeai, bỏ qua AI parser.")
+        return []
     try:
         genai.configure(api_key=api_key)
         model = genai.GenerativeModel('gemini-1.5-flash')
@@ -582,6 +589,15 @@ def smart_parse(content: bytes, filename: str, force_ai: bool = False) -> dict:
         except Exception as e:
             print(f"Gemini AI error: {e}")
 
+    return {
+        "questions": questions,
+        "total": total,
+        "ans_rate": ans_rate,
+        "method": method,
+        "ai_available": ai_ok,
+        "error": error_msg
+    }
+
 
 # ══════════════════════════════════════════
 #  API ENDPOINTS (GIỮ NGUYÊN 100%)
@@ -591,6 +607,12 @@ def smart_parse(content: bytes, filename: str, force_ai: bool = False) -> dict:
 def get_config():
     ok = has_valid_key()
     cfg = load_config()
+    return {
+        "has_api_key": ok,
+        "has_key": ok,
+        "ai_enabled": cfg.get("ai_parse_enabled", True)
+    }
+
 class ConfigBody(BaseModel):
     gemini_key: str = ""
     ai_parse_enabled: bool = True
@@ -599,6 +621,14 @@ class ConfigBody(BaseModel):
 def update_config(body: ConfigBody):
     save_json(CONFIG_FILE, {"ai_parse_enabled": body.ai_parse_enabled})
     return {"message": "Đã lưu cài đặt", "has_key": has_valid_key()}
+
+class AIConfigBody(BaseModel):
+    enabled: bool = True
+
+@app.post("/config/ai")
+def update_ai_config(body: AIConfigBody):
+    save_json(CONFIG_FILE, {"ai_parse_enabled": body.enabled})
+    return {"message": "Đã lưu cài đặt AI", "ai_enabled": body.enabled, "has_key": has_valid_key()}
 
 @app.delete("/config/key")
 def delete_api_key():
