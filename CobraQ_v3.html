@@ -339,7 +339,7 @@ body{background:var(--bg);overflow:hidden}
 <div class="mov" id="aim" onclick="if(event.target===this)cm('aim')">
   <div class="mo" style="max-width:360px">
     <div style="font-size:40px;text-align:center;margin-bottom:10px">🤖</div>
-    <div style="font-size:17px;font-weight:800;text-align:center;margin-bottom:4px">Claude AI Vision</div>
+    <div style="font-size:17px;font-weight:800;text-align:center;margin-bottom:4px"> AI Vision</div>
     <div style="font-size:13px;color:var(--t3);text-align:center;margin-bottom:20px">Đọc đề bảng có ô tô màu tự động</div>
     <div class="ai-status-box loading" id="ai-sbox">
       <div style="font-size:28px;margin-bottom:8px" id="ai-sicon">⏳</div>
@@ -509,7 +509,7 @@ function rup(m){
   const s=S.stats,files=s.files||[];
   const fcards=files.length>0?`<div style="margin-top:18px"><div class="ct" style="margin-bottom:14px">CÁC ĐỀ ĐÃ TẢI LÊN</div><div class="fgrid">${files.map((f,i)=>{const pct=f.count>0?Math.round(f.with_answer/f.count*100):0,isAI=f.parse_method==='vision_ai';return`<div class="fcard ${S.sf===f.id?'sel':''}" onclick="selF('${f.id}')"><div class="fc-h"><div class="fc-ic ${fc(i)}">${fi2(i)}</div><div><div class="fc-nm">${f.name}</div><div class="fc-dt">📅 ${f.uploaded_at}</div></div></div><div class="fc-st"><span class="fc-s">${f.count} câu</span><span class="fc-s ok">${f.with_answer} đáp án</span><span class="fc-s" style="background:#ede9fe;color:var(--p)">${pct}%</span>${isAI?'<span class="fc-s ai">🤖 AI</span>':''}${pct<50&&!isAI?'<span class="fc-s warn">⚠ Ít đáp án</span>':''}</div><div class="fc-pb"><div class="fc-bar"><div class="fc-fill" style="width:${pct}%"></div></div></div><div class="fc-act"><button class="fc-btn go" onclick="event.stopPropagation();startF('${f.id}')">▶ Làm bài</button><button class="fc-btn ai-btn" onclick="event.stopPropagation();openPreview('${f.id}','${f.name.replace(/'/g,"\\'")}')">👁 Xem</button><button class="fc-btn dl" onclick="event.stopPropagation();delF('${f.id}','${f.name}')">🗑</button></div></div>`;}).join('')}</div></div>`:'<div style="text-align:center;padding:32px;color:var(--t3)"><div style="font-size:40px;margin-bottom:12px">📂</div>Chưa có đề nào</div>';
   m.innerHTML=`<div class="page"><div class="tb"><div><div class="pt">Tệp đã tải</div><div class="ps">Mỗi file = 1 đề riêng biệt</div></div></div>
-  <div class="ai-banner" style="margin-bottom:16px"><div style="font-size:26px;flex-shrink:0">🤖</div><div style="flex:1"><div style="color:#fff;font-size:13px;font-weight:700;margin-bottom:3px">Claude AI Vision</div><div style="color:rgba(255,255,255,.6);font-size:12px">${s.ai_available?'Đang hoạt động · Tự động đọc bảng ô tô màu':'Chưa kích hoạt · Cấu hình key trong main.py'}</div></div><div class="ai-badge ${s.ai_available?'on':'off'}" onclick="openAI()">${s.ai_available?'● Hoạt động':'⚙ Trạng thái'}</div></div>
+  <div class="ai-banner" style="margin-bottom:16px"><div style="font-size:26px;flex-shrink:0">🤖</div><div style="flex:1"><div style="color:#fff;font-size:13px;font-weight:700;margin-bottom:3px"> AI Vision</div><div style="color:rgba(255,255,255,.6);font-size:12px">${s.ai_available?'Đang hoạt động · Tự động đọc bảng ô tô màu':'Chưa kích hoạt · Cấu hình key trong main.py'}</div></div><div class="ai-badge ${s.ai_available?'on':'off'}" onclick="openAI()">${s.ai_available?'● Hoạt động':'⚙ Trạng thái'}</div></div>
   <div class="sr" style="grid-template-columns:1fr 1fr;margin-bottom:18px"><div class="sc"><div class="sic ip">📚</div><div><div class="sn2" style="color:var(--p)">${s.total_questions}</div><div class="sl2">Tổng câu hỏi</div></div></div><div class="sc"><div class="sic ig">📂</div><div><div class="sn2" style="color:var(--g)">${files.length}</div><div class="sl2">Đề thi</div></div></div></div>
   <div class="card" style="margin-bottom:14px"><div class="ct" style="margin-bottom:14px">THÊM ĐỀ MỚI</div>
     <div class="dz" id="dz" onclick="$('fi').click()"><div style="font-size:38px;margin-bottom:10px;animation:fl 3s ease-in-out infinite">📂</div><div style="font-size:15px;font-weight:700;margin-bottom:5px">Kéo thả file vào đây</div><div style="font-size:12px;color:var(--t3)">${s.ai_available?'Word/PDF · Bảng ô tô màu → AI tự nhận dạng đáp án':'Word/PDF thông thường'}</div><input type="file" id="fi" accept=".docx,.pdf" multiple onchange="hf3(this.files)"><button class="bp" style="margin-top:14px" onclick="event.stopPropagation();$('fi').click()">Chọn file</button></div>
@@ -571,7 +571,7 @@ async function openAI(){
     if(d.has_api_key){
       sb.className="ai-status-box ready";si.textContent="✅";
       st.textContent="AI đang hoạt động";st.style.color="#065f46";
-      ss.textContent="Claude Vision đã kết nối · Tự động đọc bảng ô tô màu";ss.style.color="#059669";
+      ss.textContent="AI Vision đã kết nối · Tự động đọc bảng ô tô màu";ss.style.color="#059669";
     }else{
       sb.className="ai-status-box notready";si.textContent="❌";
       st.textContent="Chưa cấu hình";st.style.color="#991b1b";
@@ -595,7 +595,7 @@ function rset(m){
     <div class="sr2"><div><div class="sl3">Tên hiển thị</div><div class="sd3">${S.user?.name||'—'}</div></div><button class="bo" style="padding:7px 13px;font-size:12px" onclick="om('pm')">Đổi tên</button></div>
     <div class="sr2"><div><div class="sl3">Email</div><div class="sd3">${S.user?.email||'—'}</div></div></div>
     <div class="ct" style="margin:18px 0 3px">AI VISION</div>
-    <div class="sr2"><div><div class="sl3">Claude AI Vision</div><div class="sd3">${S.stats.ai_available?'✅ Đang hoạt động · Đọc bảng ô tô màu':'⚙️ Cấu hình key trong file main.py'}</div></div><button class="bp" style="padding:7px 13px;font-size:12px" onclick="openAI()">🤖 Trạng thái</button></div>
+    <div class="sr2"><div><div class="sl3"> AI Vision</div><div class="sd3">${S.stats.ai_available?'✅ Đang hoạt động · Đọc bảng ô tô màu':'⚙️ Cấu hình key trong file main.py'}</div></div><button class="bp" style="padding:7px 13px;font-size:12px" onclick="openAI()">🤖 Trạng thái</button></div>
     <div class="ct" style="margin:18px 0 3px">TRẢI NGHIỆM</div>
     <div class="sr2"><div><div class="sl3">Tự động sang câu tiếp</div><div class="sd3">Chuyển sau khi chọn đáp án</div></div><div class="tgg ${S.an?'on':''}" id="tg-an" onclick="tgs3()"></div></div>
     <div class="ct" style="margin:18px 0 3px">DỮ LIỆU</div>
@@ -607,6 +607,11 @@ function tgs3(){S.an=!S.an;localStorage.setItem("cq_an",S.an);$("tg-an")?.classL
 
 // ── PREVIEW & EDIT QUESTIONS ──
 let QPM = { fileId: '', fileName: '', questions: [], filtered: [], selIdx: null, dirty: false };
+function qpmQuestionHasAnswer(q) {
+  const a = q && q.answer;
+  if (!a || !'ABCD'.includes(a)) return false;
+  return (q.choices || []).some(c => c.label === a && String(c.text || '').trim());
+}
 
 async function openPreview(fileId, fileName) {
   QPM = { fileId, fileName, questions: [], filtered: [], selIdx: null, dirty: false };
@@ -624,7 +629,7 @@ async function openPreview(fileId, fileName) {
     QPM.questions = d.questions || [];
     QPM.filtered = [...QPM.questions];
     renderQList();
-    $('qpm-sub').textContent = `${QPM.questions.length} câu hỏi · ${QPM.questions.filter(q=>q.answer).length} có đáp án`;
+    $('qpm-sub').textContent = `${QPM.questions.length} câu hỏi · ${QPM.questions.filter(qpmQuestionHasAnswer).length} có đáp án`;
     $('qpm-count-lbl').textContent = `${QPM.questions.length} câu`;
   } catch(e) {
     $('qpm-list').innerHTML = '<div class="qpm-loading" style="color:var(--r)">❌ Không tải được</div>';
@@ -641,7 +646,8 @@ function renderQList() {
   const el = $('qpm-list');
   if (!QPM.filtered.length) { el.innerHTML = '<div style="text-align:center;padding:20px;color:var(--t3);font-size:12px">Không tìm thấy</div>'; return; }
   el.innerHTML = QPM.filtered.map((q, i) => {
-    const hasAns = q.answer && 'ABCD'.includes(q.answer);
+    const labs = new Set((q.choices || []).map(c => c.label).filter(Boolean));
+    const hasAns = q.answer && labs.has(q.answer) && (q.choices || []).some(c => c.label === q.answer && String(c.text || '').trim());
     const realIdx = QPM.questions.indexOf(q);
     return `<div class="qpi ${QPM.selIdx===realIdx?'on':''}" onclick="selectQ(${realIdx})">
       <div class="qpi-num">Câu ${realIdx+1}</div>
@@ -681,7 +687,7 @@ function renderEditPanel() {
       <textarea class="qef-ta" id="q-text" oninput="QPM.dirty=true">${q.question}</textarea>
     </div>
     <div class="qef-grp">
-      <label class="qef-lbl">CÁC ĐÁP ÁN (chọn radio = đáp án đúng)</label>
+      <label class="qef-lbl">CÁC ĐÁP ÁN (radio = đáp án đúng · điền ≥2 ô, C/D để trống nếu đề chỉ 2–3 phương án)</label>
       ${choiceRows}
     </div>
     <div style="display:flex;gap:8px;margin-top:6px">
@@ -697,8 +703,10 @@ async function saveQ() {
   if (!question) { tst('Câu hỏi không được trống','err'); return; }
   const labels = ['A','B','C','D'];
   const choices = labels.map(lbl => ({label:lbl, text:($(`ch-${lbl}`)?.value||'').trim()})).filter(c=>c.text);
+  if (choices.length < 2) { tst('Trắc nghiệm cần ít nhất 2 đáp án có nội dung (C, D có thể để trống).','err'); return; }
   const ansEl = document.querySelector('input[name="ans-radio"]:checked');
   const answer = ansEl ? ansEl.value : '';
+  if (!answer || !choices.some(c => c.label === answer)) { tst('Chọn ô radio đúng với một trong các đáp án đã nhập (A hoặc B, …).','err'); return; }
   try {
     const r = await fetch(`${API}/files/${encodeURIComponent(QPM.fileId)}/questions/${q.id}`, {
       method:'PUT', headers:{"Content-Type":"application/json","x-user-id":S.user?.email||"guest"},
@@ -712,7 +720,7 @@ async function saveQ() {
     });
     QPM.dirty = false;
     tst('Đã lưu câu hỏi ✓');
-    $('qpm-sub').textContent = `${QPM.questions.length} câu hỏi · ${QPM.questions.filter(q=>q.answer).length} có đáp án`;
+    $('qpm-sub').textContent = `${QPM.questions.length} câu hỏi · ${QPM.questions.filter(qpmQuestionHasAnswer).length} có đáp án`;
     renderQList();
     renderEditPanel();
     await lst();
@@ -738,7 +746,7 @@ async function deleteQ(qId) {
     QPM.selIdx = null;
     QPM.dirty = false;
     tst('Đã xóa câu hỏi');
-    $('qpm-sub').textContent = `${QPM.questions.length} câu hỏi · ${QPM.questions.filter(q=>q.answer).length} có đáp án`;
+    $('qpm-sub').textContent = `${QPM.questions.length} câu hỏi · ${QPM.questions.filter(qpmQuestionHasAnswer).length} có đáp án`;
     $('qpm-count-lbl').textContent = `${QPM.questions.length} câu`;
     renderQList();
     $('qpm-edit').innerHTML = '<div class="qpm-empty"><div style="font-size:36px">👈</div><div>Chọn một câu hỏi để chỉnh sửa</div></div>';
@@ -763,7 +771,7 @@ function showNewQForm() {
       <textarea class="qef-ta" id="nq-text" placeholder="Nhập câu hỏi..."></textarea>
     </div>
     <div class="qef-grp">
-      <label class="qef-lbl">CÁC ĐÁP ÁN (chọn radio = đáp án đúng)</label>
+      <label class="qef-lbl">CÁC ĐÁP ÁN (radio = đúng · ≥2 ô có chữ, C/D tuỳ chọn)</label>
       ${choiceRows}
     </div>
     <div style="display:flex;gap:8px;margin-top:6px">
@@ -777,9 +785,10 @@ async function submitNewQ() {
   if (!question) { tst('Câu hỏi không được trống', 'err'); return; }
   const labels = ['A','B','C','D'];
   const choices = labels.map(lbl => ({label:lbl, text:($(`nch-${lbl}`)?.value||'').trim()})).filter(c=>c.text);
-  if (choices.length < 2) { tst('Cần ít nhất 2 đáp án', 'err'); return; }
+  if (choices.length < 2) { tst('Cần ít nhất 2 đáp án có nội dung (C, D có thể để trống).', 'err'); return; }
   const ansEl = document.querySelector('input[name="new-radio"]:checked');
   const answer = ansEl ? ansEl.value : '';
+  if (!answer || !choices.some(c => c.label === answer)) { tst('Chọn radio trùng với một đáp án đã nhập.', 'err'); return; }
   try {
     const r = await fetch(`${API}/files/${encodeURIComponent(QPM.fileId)}/questions`, {
       method:'POST', headers:{"Content-Type":"application/json","x-user-id":S.user?.email||"guest"},
@@ -790,7 +799,7 @@ async function submitNewQ() {
     QPM.questions.push(d.question);
     QPM.filtered = [...QPM.questions];
     tst('Đã thêm câu hỏi mới ✓');
-    $('qpm-sub').textContent = `${QPM.questions.length} câu hỏi · ${QPM.questions.filter(q=>q.answer).length} có đáp án`;
+    $('qpm-sub').textContent = `${QPM.questions.length} câu hỏi · ${QPM.questions.filter(qpmQuestionHasAnswer).length} có đáp án`;
     $('qpm-count-lbl').textContent = `${QPM.questions.length} câu`;
     QPM.selIdx = QPM.questions.length - 1;
     renderQList();

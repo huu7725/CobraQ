@@ -3,46 +3,27 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import json, random, re, os, base64, io, traceback
 from datetime import datetime
-from pathlib import Path
 try:
     import google.generativeai as genai
 except Exception:
     genai = None
 
+import repository as repo
+from db import init_schema_from_file
+
 # ══ CẤU HÌNH API KEY ══
 # Đặt biến môi trường GEMINI_API_KEY để chạy AI (tránh commit key lên GitHub).
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "AIzaSyD-E-tL02YrkoIkAER3nwyzccD-h5zqeBE")
-# ════════════════════    
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+# ════════════════════
 
 app = FastAPI()
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
-DATA_DIR = Path("data/users")
-DATA_DIR.mkdir(parents=True, exist_ok=True)
-CONFIG_FILE = Path("data/config.json")
-SESSIONS: dict = {}
 
-def user_dir(uid):
-    d = DATA_DIR / re.sub(r'[^\w]', '_', uid or "guest")
-    d.mkdir(parents=True, exist_ok=True)
-    return d
+@app.on_event("startup")
+def _startup_init_db():
+    init_schema_from_file()
 
-def files_index_path(uid): return user_dir(uid) / "files_index.json"
-def history_path(uid):     return user_dir(uid) / "history.json"
-
-def load_json(path, default):
-    try:
-        if Path(path).exists():
-            with open(path, encoding="utf-8") as f:
-                return json.load(f)
-    except:
-        pass
-    return default
-
-def save_json(path, data):
-    Path(path).parent.mkdir(parents=True, exist_ok=True)
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
 
 def get_uid(x_user_id: str = "") -> str:
     return (x_user_id or "guest").strip()
@@ -50,10 +31,8 @@ def get_uid(x_user_id: str = "") -> str:
 def load_config():
     cfg = {"gemini_key": GEMINI_API_KEY, "ai_parse_enabled": True}
     try:
-        if CONFIG_FILE.exists():
-            saved = load_json(CONFIG_FILE, {})
-            cfg["ai_parse_enabled"] = saved.get("ai_parse_enabled", True)
-    except:
+        cfg["ai_parse_enabled"] = repo.get_ai_parse_enabled()
+    except Exception:
         pass
     return cfg
 
@@ -78,12 +57,25 @@ def is_red_text(color) -> bool:
     return False
 
 
+# Mốc phương án trong một dòng/ô (Word: "… chủ nghĩa. B. Cách …", "…B.Cách…", NBSP, v.v.)
+CHOICE_INLINE_PAT = re.compile(
+    r"(?:^|(?<=\s)|(?<=[\.．,;:]))\b([A-D])[\.\)．:：]\s*",
+)
+
+
+def _sanitize_choice_text(t: str) -> str:
+    if not t:
+        return ""
+    t = str(t).replace("\u00a0", " ").replace("\u202f", " ")
+    t = re.sub(r"[\u200b\u200c\u200d\ufeff]", "", t)
+    return t.strip()
+
+
 def split_choice_segments(text: str) -> list:
     if not text or not str(text).strip():
         return []
-    s = str(text).strip()
-    pat = re.compile(r"(?:^|(?<=\s))([A-D])[\.\)]\s*", re.IGNORECASE)
-    matches = list(pat.finditer(s))
+    s = _sanitize_choice_text(text)
+    matches = list(CHOICE_INLINE_PAT.finditer(s))
     if not matches:
         return []
     out = []
@@ -97,28 +89,87 @@ def split_choice_segments(text: str) -> list:
     return out
 
 
+def _expand_choice_cell(text: str, cell_label: str) -> list:
+    """Một ô đáp án (A/B/C/D) có thể chứa cả mốc D. E. — phần trước mốc đầu thuộc cell_label."""
+    t = _sanitize_choice_text(text or "")
+    cl = (cell_label or "?").strip().upper()
+    if not t:
+        return []
+    matches = list(CHOICE_INLINE_PAT.finditer(t))
+    if not matches:
+        return [{"label": cl, "text": t}] if cl in "ABCD" else []
+    out = []
+    if matches[0].start() > 0 and cl in "ABCD":
+        pre = t[: matches[0].start()].strip()
+        if pre:
+            out.append({"label": cl, "text": pre})
+    for i, m in enumerate(matches):
+        lb = m.group(1).upper()
+        start = m.end()
+        end = matches[i + 1].start() if i + 1 < len(matches) else len(t)
+        chunk = t[start:end].strip()
+        if chunk:
+            out.append({"label": lb, "text": chunk})
+    if not out:
+        return [{"label": cl, "text": t}] if cl in "ABCD" else []
+    return out
+
+
 def normalize_merged_choices_in_question(q: dict) -> None:
     chs = q.get("choices") or []
     if not chs:
         return
-    new_chs = []
-    seen = set()
-    for ch in chs:
-        label = (ch.get("label") or "?").upper()
-        t = (ch.get("text") or "").strip()
-        parts = split_choice_segments(t)
-        if len(parts) >= 2:
-            for p in parts:
-                lb = p["label"]
-                if lb not in seen:
+    for _ in range(5):
+        new_chs = []
+        seen = set()
+        for ch in chs:
+            label = (ch.get("label") or "?").strip().upper()
+            t = _sanitize_choice_text(ch.get("text") or "")
+            for p in _expand_choice_cell(t, label):
+                lb = (p.get("label") or "?").strip().upper()
+                tx = _sanitize_choice_text(p.get("text") or "")
+                if lb in "ABCD" and lb not in seen and tx:
                     seen.add(lb)
-                    new_chs.append(p)
-        else:
-            if label in "ABCD" and label not in seen:
-                seen.add(label)
-                new_chs.append({"label": label, "text": t})
-    if new_chs:
-        q["choices"] = sorted(new_chs, key=lambda x: "ABCD".index(x["label"]) if x["label"] in "ABCD" else 9)
+                    new_chs.append({"label": lb, "text": tx})
+        if new_chs:
+            new_chs = sorted(new_chs, key=lambda x: "ABCD".index(x["label"]) if x["label"] in "ABCD" else 9)
+        if not new_chs:
+            break
+        same_len = len(new_chs) == len(chs)
+        same_txt = same_len and all(
+            (chs[i].get("label"), _sanitize_choice_text(chs[i].get("text") or ""))
+            == (new_chs[i]["label"], new_chs[i]["text"])
+            for i in range(len(new_chs))
+        )
+        q["choices"] = new_chs
+        if same_txt:
+            break
+        chs = new_chs
+
+
+def _clean_choices_payload(choices: list) -> list:
+    out = []
+    seen = set()
+    for c in choices or []:
+        if not isinstance(c, dict):
+            continue
+        lb = (c.get("label") or "").strip().upper()
+        tx = _sanitize_choice_text(c.get("text") or "")
+        if lb in "ABCD" and tx and lb not in seen:
+            seen.add(lb)
+            out.append({"label": lb, "text": tx})
+    return sorted(out, key=lambda x: "ABCD".index(x["label"]))
+
+
+def _validate_question_choices(choices: list, answer: str) -> tuple[list, str]:
+    clean = _clean_choices_payload(choices)
+    if len(clean) < 2:
+        raise HTTPException(400, "Cần ít nhất 2 phương án có nội dung (C, D có thể để trống).")
+    ans = (answer or "").strip().upper()
+    if ans:
+        if ans not in list("ABCD") or ans not in {c["label"] for c in clean}:
+            raise HTTPException(400, "Đáp án đúng phải là A/B/C/D và trùng một phương án đã nhập.")
+    return clean, ans
 
 
 # ══════════════════════════════════════════
@@ -270,7 +321,6 @@ def parse_pdf_inline(page, hl_rects):
     except: return []
 
     questions, cur = [], None
-    choice_pat = re.compile(r"(?:^|(?<=\s))([A-D])[\.\)]\s*", re.IGNORECASE)
     for item in lines:
         text, hl = item["text"], item["hl"]
         m = re.match(r"^(?:C[âa]u\s*)?(\d+)[\.\:\)]\s*(.+)", text, re.IGNORECASE)
@@ -280,7 +330,7 @@ def parse_pdf_inline(page, hl_rects):
             rest = m.group(2).strip()
             embedded = split_choice_segments(rest)
             if len(embedded) >= 2:
-                fm = choice_pat.search(rest)
+                fm = CHOICE_INLINE_PAT.search(rest)
                 q_stem = rest[: fm.start()].strip() if fm else rest
                 cur = {"id": int(m.group(1)), "question": q_stem, "choices": list(embedded), "answer": "", "explanation": ""}
             else:
@@ -334,7 +384,6 @@ def parse_pdf(content: bytes) -> list:
 
 def _parse_lines(lines):
     questions, cur = [], None
-    choice_pat = re.compile(r"(?:^|(?<=\s))([A-D])[\.\)]\s*", re.IGNORECASE)
     for line in lines:
         line = line.strip() if isinstance(line, str) else ""
         if not line:
@@ -346,7 +395,7 @@ def _parse_lines(lines):
             rest = m.group(2).strip()
             embedded = split_choice_segments(rest)
             if len(embedded) >= 2:
-                fm = choice_pat.search(rest)
+                fm = CHOICE_INLINE_PAT.search(rest)
                 q_stem = rest[: fm.start()].strip() if fm else rest
                 cur = {"id": int(m.group(1)), "question": q_stem, "choices": list(embedded), "answer": "", "explanation": ""}
             else:
@@ -619,7 +668,7 @@ class ConfigBody(BaseModel):
 
 @app.post("/config")
 def update_config(body: ConfigBody):
-    save_json(CONFIG_FILE, {"ai_parse_enabled": body.ai_parse_enabled})
+    repo.set_ai_parse_enabled(body.ai_parse_enabled)
     return {"message": "Đã lưu cài đặt", "has_key": has_valid_key()}
 
 class AIConfigBody(BaseModel):
@@ -627,27 +676,28 @@ class AIConfigBody(BaseModel):
 
 @app.post("/config/ai")
 def update_ai_config(body: AIConfigBody):
-    save_json(CONFIG_FILE, {"ai_parse_enabled": body.enabled})
+    repo.set_ai_parse_enabled(body.enabled)
     return {"message": "Đã lưu cài đặt AI", "ai_enabled": body.enabled, "has_key": has_valid_key()}
 
 @app.delete("/config/key")
 def delete_api_key():
-    save_json(CONFIG_FILE, {"ai_parse_enabled": True})
+    repo.set_ai_parse_enabled(True)
     return {"message": "Đã reset config"}
 
 @app.get("/stats")
 def get_stats(x_user_id: str = Header(default="guest")):
     uid = get_uid(x_user_id)
-    index = load_json(files_index_path(uid), {})
-    history = load_json(history_path(uid), [])
+    repo.ensure_user(uid)
+    index = repo.get_files_index(uid)
+    agg = repo.get_stats_aggregate(uid)
     ok = has_valid_key()
     cfg = load_config()
     return {
-        "total_questions": sum(f["count"] for f in index.values()),
-        "with_answer": sum(f["with_answer"] for f in index.values()),
-        "total_sessions": len(history),
-        "avg_score": round(sum(h["percent"] for h in history)/len(history)) if history else 0,
-        "best_score": max((h["percent"] for h in history), default=0),
+        "total_questions": agg["total_questions"],
+        "with_answer": agg["with_answer"],
+        "total_sessions": agg["total_sessions"],
+        "avg_score": agg["avg_score"],
+        "best_score": agg["best_score"],
         "ai_available": ok,
         "ai_enabled": cfg.get("ai_parse_enabled", True),
         "files": [{"id": fid, "name": f["name"], "count": f["count"], "with_answer": f["with_answer"], "uploaded_at": f["uploaded_at"], "parse_method": f.get("parse_method", "normal")} for fid, f in index.items()]
@@ -676,9 +726,8 @@ async def upload_file(file: UploadFile = File(...), x_user_id: str = Header(defa
     base_name = re.sub(r'\.(docx|pdf)$', '', fname, flags=re.IGNORECASE)
     file_id = re.sub(r'[^\w\-]', '_', base_name)[:50]
 
-    index = load_json(files_index_path(uid), {})
-    q_file = user_dir(uid) / f"{file_id}.json"
-    existing = load_json(q_file, [])
+    repo.ensure_user(uid)
+    existing = repo.get_questions_json(uid, file_id)
     exist_keys = {q["question"][:60].lower() for q in existing}
     added, max_id = 0, max((q.get("id", 0) for q in existing), default=0)
     for q in questions:
@@ -690,33 +739,30 @@ async def upload_file(file: UploadFile = File(...), x_user_id: str = Header(defa
             exist_keys.add(key)
             added += 1
 
-    save_json(q_file, existing)
+    uploaded_at = datetime.now().strftime("%d/%m/%Y %H:%M")
+    repo.replace_file_questions(
+        uid, file_id, existing, base_name, fname, uploaded_at, result["method"]
+    )
     has_ans = sum(1 for q in existing if q.get("answer") in list("ABCD"))
-    index[file_id] = {"name": base_name, "filename": fname, "count": len(existing), "with_answer": has_ans, "uploaded_at": datetime.now().strftime("%d/%m/%Y %H:%M"), "file_id": file_id, "parse_method": result["method"]}
-    save_json(files_index_path(uid), index)
 
     return {"file_id": file_id, "name": base_name, "parsed": result["total"], "added": added, "total_in_file": len(existing), "with_answer": has_ans, "ans_rate": result["ans_rate"], "parse_method": result["method"], "ai_available": result["ai_available"], "message": "Upload thành công"}
 
 @app.delete("/files/{file_id}")
 def delete_file(file_id: str, x_user_id: str = Header(default="guest")):
     uid = get_uid(x_user_id)
-    index = load_json(files_index_path(uid), {})
-    if file_id not in index: raise HTTPException(404, "Không tìm thấy file")
-    q_file = user_dir(uid) / f"{file_id}.json"
-    if q_file.exists(): q_file.unlink()
-    del index[file_id]
-    save_json(files_index_path(uid), index)
+    if not repo.file_exists(uid, file_id):
+        raise HTTPException(404, "Không tìm thấy file")
+    repo.delete_questions_file(uid, file_id)
     return {"message": "Đã xóa"}
 
 @app.get("/quiz/start")
 def start_quiz(num: int = 10, file_id: str = "", x_user_id: str = Header(default="guest")):
     uid = get_uid(x_user_id)
+    repo.ensure_user(uid)
     if file_id:
-        all_qs = load_json(user_dir(uid) / f"{file_id}.json", [])
+        all_qs = repo.get_questions_json(uid, file_id)
     else:
-        index = load_json(files_index_path(uid), {})
-        all_qs = []
-        for fid in index: all_qs.extend(load_json(user_dir(uid) / f"{fid}.json", []))
+        all_qs = repo.get_all_questions(uid)
 
     valid = [q for q in all_qs if len(q.get("choices", [])) >= 2]
     if not valid: raise HTTPException(404, "Không có câu hỏi")
@@ -724,13 +770,31 @@ def start_quiz(num: int = 10, file_id: str = "", x_user_id: str = Header(default
     selected = random.sample(valid, min(num, len(valid)))
     sid = f"s{random.randint(100000, 999999)}"
     quiz = []
+    choice_labels = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
     for i, q in enumerate(selected):
-        choices = q["choices"].copy()
-        random.shuffle(choices)
-        correct_text = next((c["text"] for c in q["choices"] if c["label"] == q.get("answer", "")), None)
-        new_correct = next((c["label"] for c in choices if c["text"] == correct_text), "") if correct_text else ""
+        orig = q["choices"]
+        n = len(orig)
+        order = list(range(n))
+        random.shuffle(order)
+        choices = []
+        for pos, orig_i in enumerate(order):
+            lab = choice_labels[pos] if pos < len(choice_labels) else str(pos + 1)
+            choices.append({"label": lab, "text": orig[orig_i]["text"]})
+        ans_lbl = (q.get("answer") or "").strip().upper()
+        new_correct = ""
+        if ans_lbl:
+            try:
+                orig_i = next(
+                    j for j, c in enumerate(orig)
+                    if (c.get("label") or "").strip().upper() == ans_lbl
+                )
+            except StopIteration:
+                orig_i = None
+            if orig_i is not None:
+                pos = order.index(orig_i)
+                new_correct = choice_labels[pos] if pos < len(choice_labels) else str(pos + 1)
         quiz.append({"id": i, "question": q["question"], "choices": choices, "_correct": new_correct})
-    SESSIONS[sid] = quiz
+    repo.save_quiz_session(uid, sid, file_id or "", quiz)
     return {"session_id": sid, "total": len(quiz), "file_id": file_id, "questions": [{"id": q["id"], "question": q["question"], "choices": q["choices"]} for q in quiz]}
 
 class SubmitBody(BaseModel):
@@ -742,8 +806,9 @@ class SubmitBody(BaseModel):
 @app.post("/quiz/submit")
 def submit_quiz(body: SubmitBody, x_user_id: str = Header(default="guest")):
     uid = get_uid(x_user_id)
-    quiz = SESSIONS.get(body.session_id)
-    if not quiz: raise HTTPException(404, "Session không tồn tại")
+    quiz = repo.get_quiz_session(body.session_id)
+    if not quiz:
+        raise HTTPException(404, "Session không tồn tại")
     details = []
     for q in quiz:
         user = body.answers.get(str(q["id"]), "")
@@ -751,27 +816,28 @@ def submit_quiz(body: SubmitBody, x_user_id: str = Header(default="guest")):
         details.append({"id": q["id"], "question": q["question"], "user": user, "correct": q["_correct"], "ok": ok, "choices": q["choices"]})
     score = sum(1 for d in details if d["ok"])
     pct = round(score / len(quiz) * 100)
-    history = load_json(history_path(uid), [])
-    history.append({"id": len(history)+1, "date": datetime.now().strftime("%d/%m/%Y %H:%M"), "score": score, "total": len(quiz), "percent": pct, "time_taken": body.time_taken, "file_id": body.file_id or "all", "wrong_questions": [d["question"][:60] for d in details if not d["ok"]][:5]})
-    save_json(history_path(uid), history)
-    del SESSIONS[body.session_id]
+    wrong_q = [d["question"][:60] for d in details if not d["ok"]][:5]
+    repo.append_history(
+        uid, score, len(quiz), pct, body.time_taken, body.file_id or "all", wrong_q
+    )
+    repo.delete_quiz_session(body.session_id)
     return {"score": score, "total": len(quiz), "percent": pct, "details": details}
 
 @app.get("/history")
 def get_history(x_user_id: str = Header(default="guest")):
-    return load_json(history_path(get_uid(x_user_id)), [])
+    return repo.get_history_list(get_uid(x_user_id))
 
 @app.delete("/history/clear")
 def clear_history(x_user_id: str = Header(default="guest")):
-    save_json(history_path(get_uid(x_user_id)), [])
+    repo.clear_history(get_uid(x_user_id))
     return {"message": "Đã xóa lịch sử"}
 
 @app.get("/files/{file_id}/questions")
 def get_file_questions(file_id: str, x_user_id: str = Header(default="guest")):
     uid = get_uid(x_user_id)
-    q_file = user_dir(uid) / f"{file_id}.json"
-    if not q_file.exists(): raise HTTPException(404, "Không tìm thấy file")
-    questions = load_json(q_file, [])
+    if not repo.file_exists(uid, file_id):
+        raise HTTPException(404, "Không tìm thấy file")
+    questions = repo.get_questions_json(uid, file_id)
     return {"questions": questions, "total": len(questions)}
 
 class QuestionUpdateBody(BaseModel):
@@ -782,29 +848,21 @@ class QuestionUpdateBody(BaseModel):
 @app.put("/files/{file_id}/questions/{q_id}")
 def update_question(file_id: str, q_id: int, body: QuestionUpdateBody, x_user_id: str = Header(default="guest")):
     uid = get_uid(x_user_id)
-    q_file = user_dir(uid) / f"{file_id}.json"
-    if not q_file.exists(): raise HTTPException(404, "Không tìm thấy file")
-    questions = load_json(q_file, [])
-    for i, q in enumerate(questions):
-        if q.get("id") == q_id:
-            questions[i]["question"] = body.question
-            questions[i]["choices"] = body.choices
-            questions[i]["answer"] = body.answer
-            save_json(q_file, questions)
-            _update_index(uid, file_id, questions)
-            return {"message": "Đã cập nhật", "question": questions[i]}
-    raise HTTPException(404, "Không tìm thấy câu hỏi")
+    if not repo.file_exists(uid, file_id):
+        raise HTTPException(404, "Không tìm thấy file")
+    choices, answer = _validate_question_choices(body.choices, body.answer)
+    updated = repo.update_question_row(uid, file_id, q_id, body.question, choices, answer)
+    if not updated:
+        raise HTTPException(404, "Không tìm thấy câu hỏi")
+    return {"message": "Đã cập nhật", "question": updated}
 
 @app.delete("/files/{file_id}/questions/{q_id}")
 def delete_question(file_id: str, q_id: int, x_user_id: str = Header(default="guest")):
     uid = get_uid(x_user_id)
-    q_file = user_dir(uid) / f"{file_id}.json"
-    if not q_file.exists(): raise HTTPException(404, "Không tìm thấy file")
-    questions = load_json(q_file, [])
-    new_qs = [q for q in questions if q.get("id") != q_id]
-    if len(new_qs) == len(questions): raise HTTPException(404, "Không tìm thấy câu hỏi")
-    save_json(q_file, new_qs)
-    _update_index(uid, file_id, new_qs)
+    if not repo.file_exists(uid, file_id):
+        raise HTTPException(404, "Không tìm thấy file")
+    if not repo.delete_question_by_qid(uid, file_id, q_id):
+        raise HTTPException(404, "Không tìm thấy câu hỏi")
     return {"message": "Đã xóa câu hỏi"}
 
 class NewQuestionBody(BaseModel):
@@ -815,19 +873,11 @@ class NewQuestionBody(BaseModel):
 @app.post("/files/{file_id}/questions")
 def add_question(file_id: str, body: NewQuestionBody, x_user_id: str = Header(default="guest")):
     uid = get_uid(x_user_id)
-    q_file = user_dir(uid) / f"{file_id}.json"
-    if not q_file.exists(): raise HTTPException(404, "Không tìm thấy file")
-    questions = load_json(q_file, [])
+    if not repo.file_exists(uid, file_id):
+        raise HTTPException(404, "Không tìm thấy file")
+    choices, answer = _validate_question_choices(body.choices, body.answer)
+    questions = repo.get_questions_json(uid, file_id)
     max_id = max((q.get("id", 0) for q in questions), default=0)
-    new_q = {"id": max_id + 1, "question": body.question, "choices": body.choices, "answer": body.answer}
-    questions.append(new_q)
-    save_json(q_file, questions)
-    _update_index(uid, file_id, questions)
+    new_q = {"id": max_id + 1, "question": body.question, "choices": choices, "answer": answer, "explanation": ""}
+    repo.insert_question(uid, file_id, new_q)
     return {"message": "Đã thêm câu hỏi", "question": new_q}
-
-def _update_index(uid, file_id, questions):
-    index = load_json(files_index_path(uid), {})
-    if file_id in index:
-        index[file_id]["count"] = len(questions)
-        index[file_id]["with_answer"] = sum(1 for q in questions if q.get("answer") in list("ABCD"))
-        save_json(files_index_path(uid), index)

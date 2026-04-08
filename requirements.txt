@@ -5,3 +5,5 @@ pydantic
 pymupdf
 python-docx
 google-generativeai
+mysql-connector-python
+python-dotenv
