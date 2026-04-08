@@ -11,7 +11,7 @@ except Exception:
 
 # ══ CẤU HÌNH API KEY ══
 # Đặt biến môi trường GEMINI_API_KEY để chạy AI (tránh commit key lên GitHub).
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "YOUR_KEY_HERE")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "AIzaSyD-E-tL02YrkoIkAER3nwyzccD-h5zqeBE")
 # ════════════════════
 
 app = FastAPI()
