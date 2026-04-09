@@ -4,8 +4,11 @@
 CREATE TABLE IF NOT EXISTS users (
   uid VARCHAR(191) PRIMARY KEY,
   email VARCHAR(255) DEFAULT NULL,
+  password_hash VARCHAR(255) DEFAULT NULL,
+  role VARCHAR(20) NOT NULL DEFAULT 'user',
   display_name VARCHAR(255) DEFAULT NULL,
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_users_email (email)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS app_config (
@@ -68,4 +71,14 @@ CREATE TABLE IF NOT EXISTS quiz_history (
   date_display VARCHAR(64) NOT NULL,
   KEY idx_user_created (user_uid, created_at),
   CONSTRAINT fk_hist_user FOREIGN KEY (user_uid) REFERENCES users(uid) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS revoked_tokens (
+  token_hash CHAR(64) PRIMARY KEY,
+  token_type VARCHAR(16) NOT NULL,
+  user_uid VARCHAR(191) DEFAULT NULL,
+  expires_at DATETIME DEFAULT NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  KEY idx_revoked_user (user_uid),
+  KEY idx_revoked_expires (expires_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

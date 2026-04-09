@@ -1,50 +1,142 @@
 # CobraQ — Hệ thống ôn tập trắc nghiệm
 
-## Cấu trúc thư mục
+## 1) Giới thiệu
 
-```
+CobraQ là ứng dụng ôn tập trắc nghiệm gồm:
+- **Backend**: FastAPI (`main_updated.py`)
+- **Frontend**: HTML/JS (`CobraQ_v3.html`)
+- **CSDL**: MySQL
+
+Hỗ trợ upload đề từ:
+- `.pdf`
+- `.docx`
+- `.doc` (hỗ trợ cơ bản, khuyến nghị đổi sang `.docx` để ổn định hơn)
+
+---
+
+## 2) Cấu trúc thư mục chính
+
+```text
 CobraQ/
-├── main_updated.py     ← Backend server (FastAPI)
-├── CobraQ_v3.html      ← Giao diện web
-├── requirements.txt    ← Danh sách thư viện
-├── start.bat           ← Khởi động (double-click)
-├── stop.bat            ← Tắt server
-└── data/               ← Dữ liệu người dùng (tự tạo)
+├── main_updated.py      # Backend server (FastAPI)
+├── CobraQ_v3.html       # Giao diện web
+├── db.py                # Kết nối DB + migration nhẹ
+├── repository.py        # Tầng thao tác dữ liệu
+├── schema.sql           # Schema MySQL
+├── requirements.txt     # Danh sách thư viện Python
+├── setup.bat            # Cài đặt lần đầu
+├── start.bat            # Khởi động hệ thống
+├── stop.bat             # Tắt server (8000/5500)
+└── .env                 # Biến môi trường (tự tạo từ .env.example nếu có)
 ```
 
 ---
 
-## Cách dùng lần đầu
+## 3) Yêu cầu môi trường
 
-1. Cài Python 3.9+ tại https://www.python.org/downloads/
-   - ⚠️ Nhớ tick **"Add Python to PATH"** khi cài
-
-2. Double-click **`start.bat`**
-   - Tự cài thư viện
-   - Tự mở trình duyệt
-   - Xong!
+- Windows 10/11
+- Python **3.11** (khuyến nghị)
+- MySQL đang chạy
 
 ---
 
-## Các lần sau
+## 4) Cài đặt lần đầu
 
-Double-click **`start.bat`** là xong.
+### Bước 1: Cài Python
+- Tải tại: https://www.python.org/downloads/
+- Khi cài, nhớ tick **Add Python to PATH**
+
+### Bước 2: Cấu hình `.env`
+Nếu chưa có `.env`, bạn có thể:
+- tạo thủ công, hoặc
+- chạy `setup.bat` để tự tạo từ `.env.example` (nếu tồn tại)
+
+Ví dụ tối thiểu:
+
+```env
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_NAME=cobraq
+DB_USER=root
+DB_PASSWORD=your_password
+
+JWT_SECRET=change-me-in-production
+JWT_REFRESH_SECRET=change-me-refresh-secret
+JWT_EXPIRE_HOURS=24
+JWT_REFRESH_EXPIRE_DAYS=14
+
+ADMIN_EMAIL=admin@cobraq.local
+ADMIN_PASSWORD=admin123456
+```
+
+### Bước 3: Chạy `setup.bat`
+- Double-click `setup.bat`
+- Script sẽ:
+  - tạo `venv`
+  - cài dependencies từ `requirements.txt`
+  - kiểm tra kết nối DB
 
 ---
 
-## Lưu ý
+## 5) Chạy ứng dụng
 
-- Giữ nguyên cửa sổ CMD khi dùng — đóng CMD là server tắt
-- Dữ liệu lưu trong thư mục `data/` — **đừng xóa thư mục này**
-- Để tắt server: nhấn **CTRL+C** trong CMD, hoặc double-click `stop.bat`
+Double-click `start.bat`
+
+Script sẽ tự:
+- khởi động frontend tại `http://127.0.0.1:5500/CobraQ_v3.html`
+- khởi động backend tại `http://127.0.0.1:8000`
+- mở trình duyệt đúng URL
+
+> Lưu ý: Giữ cửa sổ backend đang chạy. Đóng cửa sổ này thì backend dừng.
 
 ---
 
-## Tính năng
+## 6) Tắt ứng dụng
 
-- Upload đề thi (Word .docx / PDF)
-- Làm bài trắc nghiệm ngẫu nhiên
-- **Xem & chỉnh sửa câu hỏi** sau khi upload (nút 👁 Xem)
-- Thêm / xóa / sửa từng câu hỏi
-- Lịch sử kết quả
-- AI Vision đọc đáp án từ bảng tô màu (cần API key Anthropic)
+Có 2 cách:
+1. Nhấn `Ctrl + C` ở cửa sổ backend
+2. Double-click `stop.bat` để tắt tiến trình đang nghe port 8000/5500
+
+---
+
+## 7) Đăng nhập mặc định
+
+Theo `.env`:
+- Email: `ADMIN_EMAIL` (ví dụ `admin@cobraq.local`)
+- Password: `ADMIN_PASSWORD` (ví dụ `admin123456`)
+
+---
+
+## 8) Upload file không ra đề — cách xử lý nhanh
+
+1. Đảm bảo backend đang chạy ở `127.0.0.1:8000`
+2. Đảm bảo mở frontend bằng **HTTP**:
+   - `http://127.0.0.1:5500/CobraQ_v3.html`
+   - không dùng `file://` hoặc `https://`
+3. Nhấn `Ctrl + F5`
+4. Thử lại bằng `.docx` nếu file `.doc` parse kém
+
+---
+
+## 9) Gợi ý khi làm việc nhóm / đẩy Git
+
+Nên commit:
+- `main_updated.py`, `db.py`, `repository.py`, `schema.sql`
+- `requirements.txt`
+- `setup.bat`, `start.bat`, `stop.bat`
+- `README.md`
+- `.env.example` (nếu có)
+
+Không nên commit:
+- `.env`
+- `__pycache__/`
+- `*.pyc`
+- dữ liệu nhạy cảm (API key, mật khẩu thật)
+
+---
+
+## 10) Ghi chú
+
+- App đã hỗ trợ cơ chế migration nhẹ cho bảng `users` khi startup.
+- Với file Word bảng lớn (ví dụ PLDC), hệ thống đã tối ưu parser để nhận câu hỏi tốt hơn.
+- Nếu cần độ chính xác cao hơn nữa về map đáp án, ưu tiên file `.docx` có định dạng đáp án rõ (bold/color/highlight hoặc bảng đáp án chuẩn).

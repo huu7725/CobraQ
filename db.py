@@ -58,8 +58,41 @@ def get_connection():
     return get_pool().get_connection()
 
 
+def _run_post_schema_migrations(conn) -> None:
+    cur = conn.cursor()
+    try:
+        cur.execute("SHOW COLUMNS FROM users")
+        cols = {r[0] for r in (cur.fetchall() or [])}
+
+        if "email" not in cols:
+            cur.execute("ALTER TABLE users ADD COLUMN email VARCHAR(255) DEFAULT NULL")
+        if "password_hash" not in cols:
+            cur.execute("ALTER TABLE users ADD COLUMN password_hash VARCHAR(255) DEFAULT NULL")
+        if "role" not in cols:
+            cur.execute("ALTER TABLE users ADD COLUMN role VARCHAR(20) NOT NULL DEFAULT 'user'")
+        if "display_name" not in cols:
+            cur.execute("ALTER TABLE users ADD COLUMN display_name VARCHAR(255) DEFAULT NULL")
+        if "created_at" not in cols:
+            cur.execute("ALTER TABLE users ADD COLUMN created_at DATETIME DEFAULT CURRENT_TIMESTAMP")
+
+        # Chuẩn hóa độ dài cột hash cho bcrypt
+        cur.execute("SHOW COLUMNS FROM users LIKE 'password_hash'")
+        row = cur.fetchone()
+        if row:
+            cur.execute("ALTER TABLE users MODIFY COLUMN password_hash VARCHAR(255) DEFAULT NULL")
+
+        # Đảm bảo unique email nếu chưa có
+        cur.execute("SHOW INDEX FROM users WHERE Key_name = 'uq_users_email'")
+        if cur.fetchone() is None:
+            cur.execute("ALTER TABLE users ADD UNIQUE KEY uq_users_email (email)")
+
+        conn.commit()
+    finally:
+        cur.close()
+
+
 def init_schema_from_file() -> None:
-    """Run schema.sql (CREATE IF NOT EXISTS)."""
+    """Run schema.sql (CREATE IF NOT EXISTS) + safe lightweight migrations."""
     sql_path = Path(__file__).resolve().parent / "schema.sql"
     raw = sql_path.read_text(encoding="utf-8")
     lines = []
@@ -80,8 +113,9 @@ def init_schema_from_file() -> None:
         for stmt in statements:
             cur.execute(stmt)
         conn.commit()
-    finally:
         cur.close()
+        _run_post_schema_migrations(conn)
+    finally:
         conn.close()
 
 

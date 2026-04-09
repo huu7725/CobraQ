@@ -1,15 +1,31 @@
 """Data access layer — MySQL backend for CobraQ."""
 from __future__ import annotations
 
+import hashlib
 import json
 from datetime import datetime, timedelta
 from typing import Any, Optional
 
+import bcrypt
+
 from db import get_connection
 
 
+def _hash_password(password: str) -> str:
+    return bcrypt.hashpw((password or "").encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+
+
+def _verify_password(password: str, password_hash: str) -> bool:
+    try:
+        return bcrypt.checkpw((password or "").encode("utf-8"), (password_hash or "").encode("utf-8"))
+    except Exception:
+        return False
+
+
 def ensure_user(uid: str, email: Optional[str] = None) -> None:
-    uid = (uid or "guest").strip() or "guest"
+    uid = (uid or "").strip()
+    if not uid:
+        raise ValueError("uid không hợp lệ")
     conn = get_connection()
     try:
         cur = conn.cursor()
@@ -18,6 +34,116 @@ def ensure_user(uid: str, email: Optional[str] = None) -> None:
             (uid, email, email),
         )
         conn.commit()
+    finally:
+        cur.close()
+        conn.close()
+
+
+def register_user(uid: str, email: str, password: str, role: str = "user") -> dict:
+    uid = (uid or "").strip()
+    email = (email or "").strip().lower()
+    password = (password or "").strip()
+    role = (role or "user").strip().lower()
+    if not uid:
+        raise ValueError("uid không hợp lệ")
+    if not email:
+        raise ValueError("email không hợp lệ")
+    if len(password) < 6:
+        raise ValueError("mật khẩu phải tối thiểu 6 ký tự")
+    if role not in ("user", "admin"):
+        role = "user"
+
+    conn = get_connection()
+    try:
+        cur = conn.cursor(dictionary=True)
+        cur.execute("SELECT uid FROM users WHERE email = %s LIMIT 1", (email,))
+        if cur.fetchone() is not None:
+            raise ValueError("Email đã tồn tại")
+        cur.execute(
+            "INSERT INTO users (uid, email, password_hash, role) VALUES (%s, %s, %s, %s)",
+            (uid, email, _hash_password(password), role),
+        )
+        conn.commit()
+        return {"uid": uid, "email": email, "role": role}
+    finally:
+        cur.close()
+        conn.close()
+
+
+def authenticate_user(email: str, password: str) -> Optional[dict]:
+    email = (email or "").strip().lower()
+    password = (password or "").strip()
+    if not email or not password:
+        return None
+
+    conn = get_connection()
+    try:
+        cur = conn.cursor(dictionary=True)
+        cur.execute(
+            "SELECT uid, email, role, password_hash FROM users WHERE email = %s LIMIT 1",
+            (email,),
+        )
+        row = cur.fetchone()
+        if not row:
+            return None
+        if not _verify_password(password, row.get("password_hash") or ""):
+            return None
+        return {"uid": row["uid"], "email": row.get("email"), "role": row.get("role") or "user"}
+    finally:
+        cur.close()
+        conn.close()
+
+
+def get_user_by_uid(uid: str) -> Optional[dict]:
+    uid = (uid or "").strip()
+    if not uid:
+        return None
+    conn = get_connection()
+    try:
+        cur = conn.cursor(dictionary=True)
+        cur.execute("SELECT uid, email, role, display_name, created_at FROM users WHERE uid = %s LIMIT 1", (uid,))
+        return cur.fetchone()
+    finally:
+        cur.close()
+        conn.close()
+
+
+def get_user_by_email(email: str) -> Optional[dict]:
+    email = (email or "").strip().lower()
+    if not email:
+        return None
+    conn = get_connection()
+    try:
+        cur = conn.cursor(dictionary=True)
+        cur.execute("SELECT uid, email, role, display_name, created_at FROM users WHERE email = %s LIMIT 1", (email,))
+        return cur.fetchone()
+    finally:
+        cur.close()
+        conn.close()
+
+
+def list_users() -> list:
+    conn = get_connection()
+    try:
+        cur = conn.cursor(dictionary=True)
+        cur.execute("SELECT uid, email, role, display_name, created_at FROM users ORDER BY created_at DESC")
+        return cur.fetchall() or []
+    finally:
+        cur.close()
+        conn.close()
+
+
+def set_user_role(uid: str, role: str) -> bool:
+    uid = (uid or "").strip()
+    role = (role or "user").strip().lower()
+    if not uid or role not in ("user", "admin"):
+        return False
+    conn = get_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute("UPDATE users SET role = %s WHERE uid = %s", (role, uid))
+        conn.commit()
+        return cur.rowcount > 0
     finally:
         cur.close()
         conn.close()
@@ -523,6 +649,52 @@ def get_stats_aggregate(uid: str) -> dict:
             "avg_score": avg,
             "best_score": int(r3["m"] or 0) if r3 and r3.get("m") is not None else 0,
         }
+    finally:
+        cur.close()
+        conn.close()
+
+
+def revoke_token(token: str, token_type: str, user_uid: Optional[str], expires_at: Optional[datetime]) -> None:
+    token = (token or "").strip()
+    if not token:
+        return
+    token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
+    conn = get_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """INSERT INTO revoked_tokens (token_hash, token_type, user_uid, expires_at)
+               VALUES (%s, %s, %s, %s)
+               ON DUPLICATE KEY UPDATE token_type=VALUES(token_type), user_uid=VALUES(user_uid), expires_at=VALUES(expires_at)""",
+            (token_hash, (token_type or "").strip()[:16], user_uid, expires_at),
+        )
+        conn.commit()
+    finally:
+        cur.close()
+        conn.close()
+
+
+def is_token_revoked(token: str) -> bool:
+    token = (token or "").strip()
+    if not token:
+        return True
+    token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
+    conn = get_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT 1 FROM revoked_tokens WHERE token_hash = %s LIMIT 1", (token_hash,))
+        return cur.fetchone() is not None
+    finally:
+        cur.close()
+        conn.close()
+
+
+def cleanup_revoked_tokens() -> None:
+    conn = get_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute("DELETE FROM revoked_tokens WHERE expires_at IS NOT NULL AND expires_at < UTC_TIMESTAMP()")
+        conn.commit()
     finally:
         cur.close()
         conn.close()

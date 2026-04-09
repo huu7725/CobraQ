@@ -20,7 +20,7 @@ if errorlevel 1 (
 
 :: Tao virtual environment neu chua co
 if not exist "venv" (
-    echo  [1/3] Tao moi truong ao Python...
+    echo  [1/4] Tao moi truong ao Python...
     python -m venv venv
 )
 
@@ -28,7 +28,7 @@ if not exist "venv" (
 call venv\Scripts\activate.bat
 
 :: Cai thu vien
-echo  [2/3] Kiem tra va cai thu vien...
+echo  [2/4] Kiem tra va cai thu vien...
 pip install -r requirements.txt -q --disable-pip-version-check
 
 :: Kiem tra file main
@@ -40,22 +40,23 @@ if not exist "main_updated.py" (
     exit /b 1
 )
 
-:: Mo trinh duyet sau 2 giay
-echo  [3/3] Khoi dong server...
+:: Khoi dong frontend http server (port 5500)
+echo  [3/4] Khoi dong web...
+start "CobraQ-Frontend" cmd /c "cd /d %~dp0 && python -m http.server 5500 --bind 127.0.0.1"
+
+:: Mo trinh duyet
+echo  [4/4] Khoi dong backend...
 echo.
 echo  =============================================
-echo   Server dang chay: http://127.0.0.1:8000
-echo   Mo CobraQ_v3.html bang trinh duyet de dung
-echo   Nhan CTRL+C de dung server
+echo   Backend: http://127.0.0.1:8000
+echo   Frontend: http://127.0.0.1:5500/CobraQ_v3.html
+echo   Nhan CTRL+C de dung backend
 echo  =============================================
 echo.
 
-:: Tu dong mo file HTML neu ton tai
-if exist "CobraQ_v3.html" (
-    start "" "CobraQ_v3.html"
-)
+start "" "http://127.0.0.1:5500/CobraQ_v3.html"
 
-:: Chay server
+:: Chay backend
 uvicorn main_updated:app --host 127.0.0.1 --port 8000
 
 pause

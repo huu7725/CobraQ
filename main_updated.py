@@ -1,8 +1,9 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException, Header
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-import json, random, re, os, base64, io, traceback
-from datetime import datetime
+import json, random, re, os, base64, io, traceback, uuid
+from datetime import datetime, timedelta
+import jwt
 try:
     import google.generativeai as genai
 except Exception:
@@ -14,19 +15,105 @@ from db import init_schema_from_file
 # ══ CẤU HÌNH API KEY ══
 # Đặt biến môi trường GEMINI_API_KEY để chạy AI (tránh commit key lên GitHub).
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "AIzaSyD-E-tL02YrkoIkAER3nwyzccD-h5zqeBE")
+<<<<<<< HEAD
 # ════════════════════
+=======
+# ════════════════════    
+>>>>>>> f7f481e (Improve upload parsing, startup scripts, and setup docs.)
 
 app = FastAPI()
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+
+JWT_SECRET = os.getenv("JWT_SECRET", "change-me-in-production")
+JWT_ALGORITHM = "HS256"
+JWT_EXPIRE_HOURS = int(os.getenv("JWT_EXPIRE_HOURS", "24"))
+JWT_REFRESH_SECRET = os.getenv("JWT_REFRESH_SECRET", JWT_SECRET)
+JWT_REFRESH_EXPIRE_DAYS = int(os.getenv("JWT_REFRESH_EXPIRE_DAYS", "14"))
+
+
+def _build_token(user: dict, token_type: str, expires_delta: timedelta, secret: str) -> str:
+    now = datetime.utcnow()
+    payload = {
+        "sub": user["uid"],
+        "email": user.get("email"),
+        "role": user.get("role") or "user",
+        "type": token_type,
+        "iat": int(now.timestamp()),
+        "exp": int((now + expires_delta).timestamp()),
+    }
+    return jwt.encode(payload, secret, algorithm=JWT_ALGORITHM)
+
+
+def create_access_token(user: dict) -> str:
+    return _build_token(user, "access", timedelta(hours=JWT_EXPIRE_HOURS), JWT_SECRET)
+
+
+def create_refresh_token(user: dict) -> str:
+    return _build_token(user, "refresh", timedelta(days=JWT_REFRESH_EXPIRE_DAYS), JWT_REFRESH_SECRET)
+
+
+def decode_token(token: str, secret: str, expected_type: str) -> dict:
+    try:
+        payload = jwt.decode(token, secret, algorithms=[JWT_ALGORITHM])
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(401, "Token đã hết hạn")
+    except jwt.InvalidTokenError:
+        raise HTTPException(401, "Token không hợp lệ")
+    if (payload.get("type") or "") != expected_type:
+        raise HTTPException(401, "Sai loại token")
+    if repo.is_token_revoked(token):
+        raise HTTPException(401, "Token đã bị thu hồi")
+    return payload
+
+
+def decode_access_token(token: str) -> dict:
+    return decode_token(token, JWT_SECRET, "access")
+
+
+def decode_refresh_token(token: str) -> dict:
+    return decode_token(token, JWT_REFRESH_SECRET, "refresh")
+
+
+def get_auth_user(authorization: str = Header(default="")) -> dict:
+    auth = (authorization or "").strip()
+    if not auth.lower().startswith("bearer "):
+        raise HTTPException(401, "Thiếu Bearer token")
+    token = auth[7:].strip()
+    if not token:
+        raise HTTPException(401, "Thiếu Bearer token")
+    payload = decode_access_token(token)
+    uid = (payload.get("sub") or "").strip()
+    if not uid:
+        raise HTTPException(401, "Token không hợp lệ")
+    user = repo.get_user_by_uid(uid)
+    if not user:
+        raise HTTPException(401, "Người dùng không tồn tại")
+    return user
 
 
 @app.on_event("startup")
 def _startup_init_db():
     init_schema_from_file()
+    repo.cleanup_revoked_tokens()
 
+    app_env = (os.getenv("APP_ENV", "dev") or "dev").strip().lower()
+    if app_env in ("prod", "production") and JWT_SECRET == "change-me-in-production":
+        raise RuntimeError("JWT_SECRET không được để mặc định ở môi trường production")
 
-def get_uid(x_user_id: str = "") -> str:
-    return (x_user_id or "guest").strip()
+    admin_email = (os.getenv("ADMIN_EMAIL", "") or "").strip().lower()
+    admin_password = (os.getenv("ADMIN_PASSWORD", "") or "").strip()
+    if admin_email and admin_password:
+        existing = repo.get_user_by_email(admin_email)
+        if existing:
+            if (existing.get("role") or "user") != "admin":
+                repo.set_user_role(existing["uid"], "admin")
+        else:
+            uid = f"adm_{uuid.uuid4().hex[:20]}"
+            try:
+                repo.register_user(uid, admin_email, admin_password, role="admin")
+            except Exception as e:
+                print(f"Seed admin thất bại: {e}")
+
 
 def load_config():
     cfg = {"gemini_key": GEMINI_API_KEY, "ai_parse_enabled": True}
@@ -417,8 +504,96 @@ def _parse_lines(lines):
         normalize_merged_choices_in_question(q)
     return questions
 
+def parse_docx_without_docx(content: bytes) -> list:
+    # Fallback khi thiếu python-docx: đọc XML trực tiếp từ file .docx
+    import html
+    import io
+    import re
+    import zipfile
+
+    try:
+        with zipfile.ZipFile(io.BytesIO(content)) as zf:
+            xml = zf.read("word/document.xml").decode("utf-8", errors="ignore")
+    except Exception:
+        return []
+
+    def _cell_text(cell_xml: str) -> str:
+        s = re.sub(r"</w:p>", "\n", cell_xml)
+        s = re.sub(r"<[^>]+>", "", s)
+        s = html.unescape(s)
+        return " ".join([x.strip() for x in s.splitlines() if x.strip()]).strip()
+
+    def _cell_marked(cell_xml: str) -> bool:
+        if re.search(r"<w:b(?:\s|/|>)", cell_xml):
+            return True
+        m = re.search(r"<w:color[^>]*w:val=\"([0-9A-Fa-f]{6}|auto)\"", cell_xml)
+        if m and m.group(1).lower() not in ("000000", "auto"):
+            return True
+        if re.search(r"<w:highlight\b", cell_xml):
+            return True
+        return False
+
+    tr_blocks = re.findall(r"<w:tr\b[\s\S]*?</w:tr>", xml)
+    questions = []
+    qid = 0
+    for tr in tr_blocks:
+        tc_blocks = re.findall(r"<w:tc\b[\s\S]*?</w:tc>", tr)
+        if len(tc_blocks) < 6:
+            continue
+
+        vals = [_cell_text(tc) for tc in tc_blocks]
+        first = (vals[0] or "").strip().upper()
+        if first in ("TT", "STT", "SỐ TT") or any("NỘI DUNG CÂU HỎI" in (v or "").upper() for v in vals):
+            continue
+        if not re.match(r"^\d+$", vals[0] or ""):
+            continue
+
+        q_text = (vals[2] if len(vals) > 2 else "").strip()
+        a_txt = (vals[3] if len(vals) > 3 else "").strip()
+        b_txt = (vals[4] if len(vals) > 4 else "").strip()
+        c_txt = (vals[5] if len(vals) > 5 else "").strip()
+        d_txt = (vals[6] if len(vals) > 6 else "").strip()
+
+        if not q_text or len(q_text) < 6:
+            continue
+
+        labels = ["A", "B", "C", "D"]
+        texts = [a_txt, b_txt, c_txt, d_txt]
+        choices = [{"label": labels[i], "text": texts[i]} for i in range(4) if texts[i]]
+        if len(choices) < 2:
+            continue
+
+        marked = []
+        for i, idx in enumerate((3, 4, 5, 6)):
+            if idx < len(tc_blocks) and texts[i] and _cell_marked(tc_blocks[idx]):
+                marked.append(labels[i])
+        answer = marked[0] if marked else ""
+
+        qid += 1
+        questions.append({"id": qid, "question": q_text, "choices": choices, "answer": answer, "explanation": ""})
+
+    if questions:
+        for q in questions:
+            normalize_merged_choices_in_question(q)
+        return questions
+
+    # fallback cuối: parse text thường
+    x = re.sub(r"</w:p>", "\n", xml)
+    x = re.sub(r"</w:tr>", "\n", x)
+    x = re.sub(r"</w:tc>", "\n", x)
+    text = re.sub(r"<[^>]+>", "", x)
+    text = html.unescape(text)
+    lines = [ln.strip() for ln in text.replace("\r", "\n").split("\n") if ln.strip()]
+    return _parse_lines(lines)
+
+
 def parse_word(content: bytes) -> list:
-    import docx, io
+    import io
+    try:
+        import docx
+    except Exception:
+        return parse_docx_without_docx(content)
+
     doc = docx.Document(io.BytesIO(content))
     questions = []
     max_id = 0
@@ -435,16 +610,24 @@ def parse_word(content: bytes) -> list:
                     lines = [x.strip() for x in c.text.split('\n') if x.strip()]
                     cell_lines.append(lines)
                 
-                # Quét tìm text bôi đậm hoặc tô màu (Nhận diện đáp án)
+                # Quét tìm text bôi đậm/tô màu/tô nền (Nhận diện đáp án)
                 correct_keywords = [[], [], [], []]
+                correct_marked = [False, False, False, False]
                 for j in range(4):
                     idx = 3 + j
                     if idx < len(cells):
                         for p in cells[idx].paragraphs:
                             for run in p.runs:
                                 rt = run.text.strip()
-                                if rt and (run.bold or (run.font.color and run.font.color.rgb and str(run.font.color.rgb) != "000000")):
-                                    if len(rt) > 1: correct_keywords[j].append(rt)
+                                marked = bool(
+                                    run.bold
+                                    or (run.font.color and run.font.color.rgb and str(run.font.color.rgb) not in ("000000", "None"))
+                                    or (run.font.highlight_color is not None)
+                                )
+                                if marked:
+                                    correct_marked[j] = True
+                                if rt and marked and len(rt) > 0:
+                                    correct_keywords[j].append(rt)
                 
                 max_lines = max(len(lines) for lines in cell_lines) if cell_lines else 0
                 for i in range(max_lines):
@@ -467,8 +650,11 @@ def parse_word(content: bytes) -> list:
                             ans_text = cell_lines[idx][i] if idx < len(cell_lines) and i < len(cell_lines[idx]) else ""
                             if ans_text:
                                 choices.append({"label": labels[j], "text": ans_text})
-                                # Kiểm tra xem đáp án có nằm trong phần chữ in đậm/tô màu không
-                                if any(k in ans_text for k in correct_keywords[j]):
+                                # Ưu tiên ô được đánh dấu (bold/color/highlight)
+                                if not correct_ans and correct_marked[j]:
+                                    correct_ans = labels[j]
+                                # Fallback: kiểm tra text trùng phần in đậm/tô màu
+                                if not correct_ans and any(k in ans_text for k in correct_keywords[j]):
                                     correct_ans = labels[j]
                         
                         q_text = cell_lines[2][i] if 2 < len(cell_lines) and i < len(cell_lines[2]) else ""
@@ -490,6 +676,8 @@ def parse_word(content: bytes) -> list:
                                 ans_text = cell_lines[idx][i] if idx < len(cell_lines) and i < len(cell_lines[idx]) else ""
                                 if ans_text and j < len(current_q["choices"]):
                                     current_q["choices"][j]["text"] += "\n" + ans_text
+                                    if not current_q["answer"] and correct_marked[j]:
+                                        current_q["answer"] = ['A', 'B', 'C', 'D'][j]
                                     if not current_q["answer"] and any(k in ans_text for k in correct_keywords[j]):
                                         current_q["answer"] = ['A', 'B', 'C', 'D'][j]
 
@@ -602,9 +790,30 @@ def parse_with_gemini_ai(content: bytes, filetype: str, api_key: str) -> list:
         print(f"Lỗi khi gọi API Gemini: {e}")
         return []
 
+def parse_doc_legacy(content: bytes) -> list:
+    # Hỗ trợ .doc dạng văn bản thuần; nếu là binary Word cũ thì có thể không đọc được
+    candidates = ["utf-8", "utf-16", "cp1258", "latin-1"]
+    text = ""
+    for enc in candidates:
+        try:
+            text = content.decode(enc)
+            break
+        except Exception:
+            continue
+    if not text:
+        return []
+    lines = [ln.strip("\ufeff\x00 ") for ln in text.replace("\r", "\n").split("\n") if ln.strip()]
+    return _parse_lines(lines)
+
+
 def smart_parse(content: bytes, filename: str, force_ai: bool = False) -> dict:
     fname_lower = filename.lower()
-    filetype = "pdf" if fname_lower.endswith(".pdf") else "docx"
+    if fname_lower.endswith(".pdf"):
+        filetype = "pdf"
+    elif fname_lower.endswith(".doc"):
+        filetype = "doc"
+    else:
+        filetype = "docx"
     cfg = load_config()
     ai_key = cfg.get("gemini_key", "").strip()
     ai_ok = bool(ai_key and ai_key != "ĐIỀN_API_KEY_CỦA_BẠN_VÀO_ĐÂY")
@@ -612,7 +821,12 @@ def smart_parse(content: bytes, filename: str, force_ai: bool = False) -> dict:
 
     method, error_msg = "normal", ""
     try:
-        questions = parse_pdf(content) if filetype == "pdf" else parse_word(content)
+        if filetype == "pdf":
+            questions = parse_pdf(content)
+        elif filetype == "doc":
+            questions = parse_doc_legacy(content)
+        else:
+            questions = parse_word(content)
     except Exception as e:
         questions = []
         error_msg = str(e)
@@ -652,6 +866,138 @@ def smart_parse(content: bytes, filename: str, force_ai: bool = False) -> dict:
 #  API ENDPOINTS (GIỮ NGUYÊN 100%)
 # ══════════════════════════════════════════
 
+class RegisterBody(BaseModel):
+    email: str
+    password: str
+    role: str = "user"
+
+
+class LoginBody(BaseModel):
+    email: str
+    password: str
+
+
+class RefreshBody(BaseModel):
+    refresh_token: str
+
+
+def _auth_payload(user: dict) -> dict:
+    access_token = create_access_token(user)
+    refresh_token = create_refresh_token(user)
+    return {
+        "user": user,
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "token_type": "bearer",
+    }
+
+
+def require_admin(user: dict) -> None:
+    if not user or (user.get("role") or "user") != "admin":
+        raise HTTPException(403, "Chỉ admin mới có quyền thực hiện.")
+
+
+@app.post("/auth/register")
+def register(body: RegisterBody):
+    email = (body.email or "").strip().lower()
+    if not email:
+        raise HTTPException(400, "Email không hợp lệ")
+    uid = f"u_{uuid.uuid4().hex[:20]}"
+    try:
+        role = (body.role or "user").strip().lower()
+        user = repo.register_user(uid, email, body.password, role=role)
+        return {"message": "Đăng ký thành công", **_auth_payload(user)}
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+@app.post("/auth/login")
+def login(body: LoginBody):
+    user = repo.authenticate_user(body.email, body.password)
+    if not user:
+        raise HTTPException(401, "Sai email hoặc mật khẩu")
+    return {"message": "Đăng nhập thành công", **_auth_payload(user)}
+
+
+@app.post("/auth/refresh")
+def refresh_token(body: RefreshBody):
+    token = (body.refresh_token or "").strip()
+    if not token:
+        raise HTTPException(400, "Thiếu refresh_token")
+    payload = decode_refresh_token(token)
+    uid = (payload.get("sub") or "").strip()
+    if not uid:
+        raise HTTPException(401, "Token không hợp lệ")
+    user = repo.get_user_by_uid(uid)
+    if not user:
+        raise HTTPException(401, "Người dùng không tồn tại")
+
+    exp = payload.get("exp")
+    exp_dt = datetime.utcfromtimestamp(int(exp)) if exp else None
+    repo.revoke_token(token, "refresh", uid, exp_dt)
+
+    return {"message": "Làm mới token thành công", **_auth_payload(user)}
+
+
+@app.post("/auth/logout")
+def logout(body: RefreshBody, authorization: str = Header(default="")):
+    auth = (authorization or "").strip()
+    if not auth.lower().startswith("bearer "):
+        raise HTTPException(401, "Thiếu Bearer token")
+    access_token = auth[7:].strip()
+    if not access_token:
+        raise HTTPException(401, "Thiếu Bearer token")
+
+    access_payload = decode_access_token(access_token)
+    access_exp = access_payload.get("exp")
+    access_exp_dt = datetime.utcfromtimestamp(int(access_exp)) if access_exp else None
+    uid = (access_payload.get("sub") or "").strip() or None
+    repo.revoke_token(access_token, "access", uid, access_exp_dt)
+
+    refresh_token_str = (body.refresh_token or "").strip()
+    if refresh_token_str:
+        try:
+            refresh_payload = decode_refresh_token(refresh_token_str)
+            refresh_exp = refresh_payload.get("exp")
+            refresh_exp_dt = datetime.utcfromtimestamp(int(refresh_exp)) if refresh_exp else None
+            refresh_uid = (refresh_payload.get("sub") or "").strip() or uid
+            repo.revoke_token(refresh_token_str, "refresh", refresh_uid, refresh_exp_dt)
+        except HTTPException:
+            pass
+
+    return {"message": "Đăng xuất thành công"}
+
+
+@app.get("/auth/me")
+def me(authorization: str = Header(default="")):
+    user = get_auth_user(authorization)
+    return {"user": user}
+
+
+@app.get("/admin/users")
+def admin_list_users(authorization: str = Header(default="")):
+    user = get_auth_user(authorization)
+    require_admin(user)
+    return {"users": repo.list_users()}
+
+
+class UpdateRoleBody(BaseModel):
+    role: str
+
+
+@app.put("/admin/users/{uid}/role")
+def admin_update_role(uid: str, body: UpdateRoleBody, authorization: str = Header(default="")):
+    admin_user = get_auth_user(authorization)
+    require_admin(admin_user)
+    role = (body.role or "").strip().lower()
+    if role not in ("user", "admin"):
+        raise HTTPException(400, "Role chỉ nhận user/admin")
+    ok = repo.set_user_role(uid, role)
+    if not ok:
+        raise HTTPException(404, "Không tìm thấy user")
+    return {"message": "Đã cập nhật role", "uid": uid, "role": role}
+
+
 @app.get("/config")
 def get_config():
     ok = has_valid_key()
@@ -685,9 +1031,9 @@ def delete_api_key():
     return {"message": "Đã reset config"}
 
 @app.get("/stats")
-def get_stats(x_user_id: str = Header(default="guest")):
-    uid = get_uid(x_user_id)
-    repo.ensure_user(uid)
+def get_stats(authorization: str = Header(default="")):
+    user = get_auth_user(authorization)
+    uid = user["uid"]
     index = repo.get_files_index(uid)
     agg = repo.get_stats_aggregate(uid)
     ok = has_valid_key()
@@ -704,13 +1050,14 @@ def get_stats(x_user_id: str = Header(default="guest")):
     }
 
 @app.post("/upload")
-async def upload_file(file: UploadFile = File(...), x_user_id: str = Header(default="guest"), x_force_ai: str = Header(default="false")):
-    uid = get_uid(x_user_id)
+async def upload_file(file: UploadFile = File(...), authorization: str = Header(default=""), x_force_ai: str = Header(default="false")):
+    user = get_auth_user(authorization)
+    uid = user["uid"]
     content = await file.read()
     fname = file.filename or "file"
 
-    if not (fname.lower().endswith(".docx") or fname.lower().endswith(".pdf")):
-        raise HTTPException(400, "Chỉ hỗ trợ .docx và .pdf")
+    if not (fname.lower().endswith(".docx") or fname.lower().endswith(".doc") or fname.lower().endswith(".pdf")):
+        raise HTTPException(400, "Chỉ hỗ trợ .doc, .docx và .pdf")
 
     force_ai = x_force_ai.lower() == "true"
     try:
@@ -723,42 +1070,37 @@ async def upload_file(file: UploadFile = File(...), x_user_id: str = Header(defa
         err = result.get("error", "")
         raise HTTPException(400, f"Không tìm thấy câu hỏi.{' Chi tiết: '+err if err else ' Thử bật AI Vision.'}")
 
-    base_name = re.sub(r'\.(docx|pdf)$', '', fname, flags=re.IGNORECASE)
+    base_name = re.sub(r'\.(docx|doc|pdf)$', '', fname, flags=re.IGNORECASE)
     file_id = re.sub(r'[^\w\-]', '_', base_name)[:50]
 
+    # REPLACE mode: upload lại cùng file_id sẽ ghi đè toàn bộ câu cũ
     repo.ensure_user(uid)
-    existing = repo.get_questions_json(uid, file_id)
-    exist_keys = {q["question"][:60].lower() for q in existing}
-    added, max_id = 0, max((q.get("id", 0) for q in existing), default=0)
-    for q in questions:
-        key = q["question"][:60].lower()
-        if key not in exist_keys:
-            max_id += 1
-            q["id"] = max_id
-            existing.append(q)
-            exist_keys.add(key)
-            added += 1
+    normalized_questions = []
+    for i, q in enumerate(questions, start=1):
+        q["id"] = i
+        normalized_questions.append(q)
 
     uploaded_at = datetime.now().strftime("%d/%m/%Y %H:%M")
     repo.replace_file_questions(
-        uid, file_id, existing, base_name, fname, uploaded_at, result["method"]
+        uid, file_id, normalized_questions, base_name, fname, uploaded_at, result["method"]
     )
-    has_ans = sum(1 for q in existing if q.get("answer") in list("ABCD"))
+    has_ans = sum(1 for q in normalized_questions if q.get("answer") in list("ABCD"))
 
-    return {"file_id": file_id, "name": base_name, "parsed": result["total"], "added": added, "total_in_file": len(existing), "with_answer": has_ans, "ans_rate": result["ans_rate"], "parse_method": result["method"], "ai_available": result["ai_available"], "message": "Upload thành công"}
+    return {"file_id": file_id, "name": base_name, "parsed": result["total"], "added": len(normalized_questions), "total_in_file": len(normalized_questions), "with_answer": has_ans, "ans_rate": result["ans_rate"], "parse_method": result["method"], "ai_available": result["ai_available"], "message": "Upload thành công (đã ghi đè đề cũ)"}
 
 @app.delete("/files/{file_id}")
-def delete_file(file_id: str, x_user_id: str = Header(default="guest")):
-    uid = get_uid(x_user_id)
+def delete_file(file_id: str, authorization: str = Header(default="")):
+    user = get_auth_user(authorization)
+    uid = user["uid"]
     if not repo.file_exists(uid, file_id):
         raise HTTPException(404, "Không tìm thấy file")
     repo.delete_questions_file(uid, file_id)
     return {"message": "Đã xóa"}
 
 @app.get("/quiz/start")
-def start_quiz(num: int = 10, file_id: str = "", x_user_id: str = Header(default="guest")):
-    uid = get_uid(x_user_id)
-    repo.ensure_user(uid)
+def start_quiz(num: int = 10, file_id: str = "", authorization: str = Header(default="")):
+    user = get_auth_user(authorization)
+    uid = user["uid"]
     if file_id:
         all_qs = repo.get_questions_json(uid, file_id)
     else:
@@ -804,8 +1146,9 @@ class SubmitBody(BaseModel):
     file_id: str = ""
 
 @app.post("/quiz/submit")
-def submit_quiz(body: SubmitBody, x_user_id: str = Header(default="guest")):
-    uid = get_uid(x_user_id)
+def submit_quiz(body: SubmitBody, authorization: str = Header(default="")):
+    user = get_auth_user(authorization)
+    uid = user["uid"]
     quiz = repo.get_quiz_session(body.session_id)
     if not quiz:
         raise HTTPException(404, "Session không tồn tại")
@@ -824,17 +1167,20 @@ def submit_quiz(body: SubmitBody, x_user_id: str = Header(default="guest")):
     return {"score": score, "total": len(quiz), "percent": pct, "details": details}
 
 @app.get("/history")
-def get_history(x_user_id: str = Header(default="guest")):
-    return repo.get_history_list(get_uid(x_user_id))
+def get_history(authorization: str = Header(default="")):
+    user = get_auth_user(authorization)
+    return repo.get_history_list(user["uid"])
 
 @app.delete("/history/clear")
-def clear_history(x_user_id: str = Header(default="guest")):
-    repo.clear_history(get_uid(x_user_id))
+def clear_history(authorization: str = Header(default="")):
+    user = get_auth_user(authorization)
+    repo.clear_history(user["uid"])
     return {"message": "Đã xóa lịch sử"}
 
 @app.get("/files/{file_id}/questions")
-def get_file_questions(file_id: str, x_user_id: str = Header(default="guest")):
-    uid = get_uid(x_user_id)
+def get_file_questions(file_id: str, authorization: str = Header(default="")):
+    user = get_auth_user(authorization)
+    uid = user["uid"]
     if not repo.file_exists(uid, file_id):
         raise HTTPException(404, "Không tìm thấy file")
     questions = repo.get_questions_json(uid, file_id)
@@ -846,8 +1192,9 @@ class QuestionUpdateBody(BaseModel):
     answer: str = ""
 
 @app.put("/files/{file_id}/questions/{q_id}")
-def update_question(file_id: str, q_id: int, body: QuestionUpdateBody, x_user_id: str = Header(default="guest")):
-    uid = get_uid(x_user_id)
+def update_question(file_id: str, q_id: int, body: QuestionUpdateBody, authorization: str = Header(default="")):
+    user = get_auth_user(authorization)
+    uid = user["uid"]
     if not repo.file_exists(uid, file_id):
         raise HTTPException(404, "Không tìm thấy file")
     choices, answer = _validate_question_choices(body.choices, body.answer)
@@ -857,8 +1204,9 @@ def update_question(file_id: str, q_id: int, body: QuestionUpdateBody, x_user_id
     return {"message": "Đã cập nhật", "question": updated}
 
 @app.delete("/files/{file_id}/questions/{q_id}")
-def delete_question(file_id: str, q_id: int, x_user_id: str = Header(default="guest")):
-    uid = get_uid(x_user_id)
+def delete_question(file_id: str, q_id: int, authorization: str = Header(default="")):
+    user = get_auth_user(authorization)
+    uid = user["uid"]
     if not repo.file_exists(uid, file_id):
         raise HTTPException(404, "Không tìm thấy file")
     if not repo.delete_question_by_qid(uid, file_id, q_id):
@@ -871,13 +1219,20 @@ class NewQuestionBody(BaseModel):
     answer: str = ""
 
 @app.post("/files/{file_id}/questions")
-def add_question(file_id: str, body: NewQuestionBody, x_user_id: str = Header(default="guest")):
-    uid = get_uid(x_user_id)
+def add_question(file_id: str, body: NewQuestionBody, authorization: str = Header(default="")):
+    user = get_auth_user(authorization)
+    uid = user["uid"]
     if not repo.file_exists(uid, file_id):
         raise HTTPException(404, "Không tìm thấy file")
     choices, answer = _validate_question_choices(body.choices, body.answer)
     questions = repo.get_questions_json(uid, file_id)
     max_id = max((q.get("id", 0) for q in questions), default=0)
-    new_q = {"id": max_id + 1, "question": body.question, "choices": choices, "answer": answer, "explanation": ""}
+    new_q = {
+        "id": max_id + 1,
+        "question": body.question,
+        "choices": choices,
+        "answer": answer,
+        "explanation": "",
+    }
     repo.insert_question(uid, file_id, new_q)
     return {"message": "Đã thêm câu hỏi", "question": new_q}
