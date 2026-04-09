@@ -136,7 +136,8 @@ Không nên commit:
 ---
 
 ## 10) Ghi chú
-
+- App chưa hỗ trợ tự sinh kết quả ( khuyến khích upload file có đáp án để test và làm )
+- App chưa hỗ trợ các môn học như toán lí hóa ( các công thức toán học ) 
 - App đã hỗ trợ cơ chế migration nhẹ cho bảng `users` khi startup.
 - Với file Word bảng lớn (ví dụ PLDC), hệ thống đã tối ưu parser để nhận câu hỏi tốt hơn.
 - Nếu cần độ chính xác cao hơn nữa về map đáp án, ưu tiên file `.docx` có định dạng đáp án rõ (bold/color/highlight hoặc bảng đáp án chuẩn).
