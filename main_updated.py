@@ -4,8 +4,12 @@ from pydantic import BaseModel
 import json, random, re, os, base64, io, traceback, uuid
 from datetime import datetime, timedelta
 import jwt
+import importlib
+
+# Import mềm để tránh lỗi IDE "could not be resolved" khi thiếu package trong môi trường hiện tại.
+# Ưu tiên SDK cũ đang dùng trong code (google.generativeai).
 try:
-    import google.generativeai as genai
+    genai = importlib.import_module("google.generativeai")
 except Exception:
     genai = None
 
@@ -13,13 +17,9 @@ import repository as repo
 from db import init_schema_from_file
 
 # ══ CẤU HÌNH API KEY ══
-# Đặt biến môi trường GEMINI_API_KEY để chạy AI (tránh commit key lên GitHub).
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "AIzaSyD-E-tL02YrkoIkAER3nwyzccD-h5zqeBE")
-<<<<<<< HEAD
+# Không hardcode key trong source; lấy từ biến môi trường/.env.
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "AIzaSyBsWu6TFrwzhjQfPr6BypUNG4jKYtwxJIA").strip()
 # ════════════════════
-=======
-# ════════════════════    
->>>>>>> f7f481e (Improve upload parsing, startup scripts, and setup docs.)
 
 app = FastAPI()
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
@@ -589,8 +589,9 @@ def parse_docx_without_docx(content: bytes) -> list:
 
 def parse_word(content: bytes) -> list:
     import io
+    import importlib
     try:
-        import docx
+        docx = importlib.import_module("docx")
     except Exception:
         return parse_docx_without_docx(content)
 
@@ -763,12 +764,21 @@ def parse_with_gemini_ai(content: bytes, filetype: str, api_key: str) -> list:
             ])
         else:
             # Giải mã DOCX thành chữ trước khi gửi cho AI để chống lỗi 400 Bad Request
-            import docx, io
-            doc = docx.Document(io.BytesIO(content))
-            text_lines = [p.text for p in doc.paragraphs if p.text.strip()]
-            for table in doc.tables:
-                for row in table.rows:
-                    text_lines.append(" | ".join(c.text.replace('\n', ' ').strip() for c in row.cells))
+            import io
+            import importlib
+            try:
+                docx = importlib.import_module("docx")
+                doc = docx.Document(io.BytesIO(content))
+                text_lines = [p.text for p in doc.paragraphs if p.text.strip()]
+                for table in doc.tables:
+                    for row in table.rows:
+                        text_lines.append(" | ".join(c.text.replace('\n', ' ').strip() for c in row.cells))
+            except Exception:
+                # fallback khi thiếu python-docx
+                text_lines = [
+                    q.get("question", "") + " " + " ".join(ch.get("text", "") for ch in q.get("choices", []))
+                    for q in parse_docx_without_docx(content)
+                ]
             
             full_text = "\n".join(text_lines)
             print(f"Đang gửi nội dung Word ({len(full_text)} ký tự) lên Gemini AI...")
