@@ -389,8 +389,15 @@ body{background:var(--bg);overflow:hidden}
 </div>
 
 <script>
-const API_LIST=["http://127.0.0.1:8000","http://localhost:8000"];
-let API=API_LIST[0];
+const DEFAULT_API_HOST = (location.hostname && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1')
+  ? location.hostname
+  : '127.0.0.1';
+const API_LIST=[
+  `http://${DEFAULT_API_HOST}:8000`,
+  "http://127.0.0.1:8000",
+  "http://localhost:8000"
+];
+let API=(localStorage.getItem("cq_api")||"").trim()||API_LIST[0];
 
 async function publicFetch(path, opts={}){
   let lastErr = null;

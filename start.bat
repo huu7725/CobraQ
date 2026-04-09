@@ -40,23 +40,24 @@ if not exist "main_updated.py" (
     exit /b 1
 )
 
-:: Khoi dong frontend http server (port 5500)
+:: Khoi dong frontend http server (port 5500) - cho phep truy cap tu LAN
 echo  [3/4] Khoi dong web...
-start "CobraQ-Frontend" cmd /c "cd /d %~dp0 && python -m http.server 5500 --bind 127.0.0.1"
+start "CobraQ-Frontend" cmd /c "cd /d %~dp0 && python -m http.server 5500 --bind 0.0.0.0"
 
 :: Mo trinh duyet
 echo  [4/4] Khoi dong backend...
 echo.
 echo  =============================================
-echo   Backend: http://127.0.0.1:8000
-echo   Frontend: http://127.0.0.1:5500/CobraQ_v3.html
+echo   Backend (local): http://127.0.0.1:8000
+echo   Frontend (local): http://127.0.0.1:5500/CobraQ_v3.html
+echo   Frontend (LAN): http://<IP-MAY-CHU>:5500/CobraQ_v3.html
 echo   Nhan CTRL+C de dung backend
 echo  =============================================
 echo.
 
 start "" "http://127.0.0.1:5500/CobraQ_v3.html"
 
-:: Chay backend
-uvicorn main_updated:app --host 127.0.0.1 --port 8000
+:: Chay backend - cho phep truy cap tu LAN
+uvicorn main_updated:app --host 0.0.0.0 --port 8000
 
 pause

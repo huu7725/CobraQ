@@ -36,7 +36,8 @@ CobraQ/
 
 - Windows 10/11
 - Python **3.11** (khuyến nghị)
-- MySQL đang chạy
+- **Không bắt buộc MySQL** nếu dùng SQLite fallback (mặc định)
+- Nếu chạy MySQL production thì cần MySQL đang chạy
 
 ---
 
@@ -51,14 +52,11 @@ Nếu chưa có `.env`, bạn có thể:
 - tạo thủ công, hoặc
 - chạy `setup.bat` để tự tạo từ `.env.example` (nếu tồn tại)
 
-Ví dụ tối thiểu:
+Ví dụ tối thiểu (chạy ngay không cần MySQL):
 
 ```env
-DB_HOST=127.0.0.1
-DB_PORT=3306
-DB_NAME=cobraq
-DB_USER=root
-DB_PASSWORD=your_password
+DB_ENGINE=sqlite
+SQLITE_PATH=cobraq.sqlite3
 
 JWT_SECRET=change-me-in-production
 JWT_REFRESH_SECRET=change-me-refresh-secret
@@ -69,12 +67,23 @@ ADMIN_EMAIL=admin@cobraq.local
 ADMIN_PASSWORD=admin123456
 ```
 
+Nếu muốn dùng MySQL, đổi:
+
+```env
+DB_ENGINE=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_NAME=cobraq
+DB_USER=root
+DB_PASSWORD=your_password
+```
+
 ### Bước 3: Chạy `setup.bat`
 - Double-click `setup.bat`
 - Script sẽ:
   - tạo `venv`
   - cài dependencies từ `requirements.txt`
-  - kiểm tra kết nối DB
+  - kiểm tra DB (SQLite luôn pass; MySQL cần cấu hình đúng)
 
 ---
 
