@@ -598,13 +598,23 @@ def get_quiz_session(session_id: str) -> Optional[list]:
         exp = row["expires_at"]
         if exp is not None:
             now = datetime.now(timezone.utc)
-            exp_aware = exp if getattr(exp, "tzinfo", None) else exp.replace(tzinfo=timezone.utc)
-            if now > exp_aware:
-                cur2 = conn.cursor()
-                cur2.execute("DELETE FROM quiz_sessions WHERE session_id = %s", (session_id,))
-                conn.commit()
-                cur2.close()
-                return None
+            exp_dt = None
+            if isinstance(exp, datetime):
+                exp_dt = exp
+            elif isinstance(exp, str):
+                # SQLite thường trả DATETIME dạng chuỗi
+                try:
+                    exp_dt = datetime.fromisoformat(exp.replace("Z", "+00:00"))
+                except Exception:
+                    exp_dt = None
+            if exp_dt is not None:
+                exp_aware = exp_dt if getattr(exp_dt, "tzinfo", None) else exp_dt.replace(tzinfo=timezone.utc)
+                if now > exp_aware:
+                    cur2 = conn.cursor()
+                    cur2.execute("DELETE FROM quiz_sessions WHERE session_id = %s", (session_id,))
+                    conn.commit()
+                    cur2.close()
+                    return None
         p = row["payload_json"]
         if isinstance(p, str):
             p = json.loads(p)
