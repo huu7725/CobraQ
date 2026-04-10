@@ -3,8 +3,8 @@ from __future__ import annotations
 
 import hashlib
 import json
-from datetime import datetime, timedelta
-from typing import Any, Optional
+from datetime import datetime, timedelta, timezone
+from typing import Optional
 
 import bcrypt
 
@@ -178,7 +178,6 @@ def set_ai_parse_enabled(enabled: bool) -> None:
 
 
 def get_files_index(uid: str) -> dict:
-    ensure_user(uid)
     conn = get_connection()
     try:
         cur = conn.cursor(dictionary=True)
@@ -206,7 +205,6 @@ def get_files_index(uid: str) -> dict:
 
 
 def get_questions_json(uid: str, file_id: str) -> list:
-    ensure_user(uid)
     conn = get_connection()
     try:
         cur = conn.cursor(dictionary=True)
@@ -236,12 +234,18 @@ def get_questions_json(uid: str, file_id: str) -> list:
 
 
 def get_all_questions(uid: str) -> list:
-    ensure_user(uid)
-    index = get_files_index(uid)
-    all_q = []
-    for fid in index:
-        all_q.extend(get_questions_json(uid, fid))
-    return all_q
+    conn = get_connection()
+    try:
+        cur = conn.cursor(dictionary=True)
+        cur.execute(
+            "SELECT q_id, question_text, choices_json, answer, explanation FROM questions WHERE user_uid = %s ORDER BY file_id, q_id",
+            (uid,),
+        )
+        rows = cur.fetchall() or []
+        return [_row_to_question(r) for r in rows]
+    finally:
+        cur.close()
+        conn.close()
 
 
 def _row_to_question(r: dict) -> dict:
@@ -513,7 +517,6 @@ def append_history(
 
 
 def get_history_list(uid: str) -> list:
-    ensure_user(uid)
     conn = get_connection()
     try:
         cur = conn.cursor(dictionary=True)
@@ -559,7 +562,7 @@ def clear_history(uid: str) -> None:
 
 def save_quiz_session(uid: str, session_id: str, file_id: str, quiz: list, hours: int = 48) -> None:
     ensure_user(uid)
-    exp = datetime.utcnow() + timedelta(hours=hours)
+    exp = datetime.now(timezone.utc) + timedelta(hours=hours)
     conn = get_connection()
     try:
         cur = conn.cursor()
@@ -594,9 +597,9 @@ def get_quiz_session(session_id: str) -> Optional[list]:
             return None
         exp = row["expires_at"]
         if exp is not None:
-            now = datetime.utcnow()
-            exp_naive = exp.replace(tzinfo=None) if getattr(exp, "tzinfo", None) else exp
-            if now > exp_naive:
+            now = datetime.now(timezone.utc)
+            exp_aware = exp if getattr(exp, "tzinfo", None) else exp.replace(tzinfo=timezone.utc)
+            if now > exp_aware:
                 cur2 = conn.cursor()
                 cur2.execute("DELETE FROM quiz_sessions WHERE session_id = %s", (session_id,))
                 conn.commit()
@@ -623,7 +626,6 @@ def delete_quiz_session(session_id: str) -> None:
 
 
 def get_stats_aggregate(uid: str) -> dict:
-    ensure_user(uid)
     conn = get_connection()
     try:
         cur = conn.cursor(dictionary=True)

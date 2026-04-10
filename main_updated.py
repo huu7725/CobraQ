@@ -2,7 +2,7 @@ from fastapi import FastAPI, UploadFile, File, HTTPException, Header
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import json, random, re, os, base64, io, traceback, uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import jwt
 import importlib
 
@@ -22,7 +22,10 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
 # ════════════════════
 
 app = FastAPI()
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+_cors_origins = [o.strip() for o in os.getenv("CORS_ORIGINS", "*").split(",") if o.strip()]
+if not _cors_origins:
+    _cors_origins = ["*"]
+app.add_middleware(CORSMiddleware, allow_origins=_cors_origins, allow_methods=["*"], allow_headers=["*"])
 
 JWT_SECRET = os.getenv("JWT_SECRET", "change-me-in-production")
 JWT_ALGORITHM = "HS256"
@@ -32,7 +35,7 @@ JWT_REFRESH_EXPIRE_DAYS = int(os.getenv("JWT_REFRESH_EXPIRE_DAYS", "14"))
 
 
 def _build_token(user: dict, token_type: str, expires_delta: timedelta, secret: str) -> str:
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     payload = {
         "sub": user["uid"],
         "email": user.get("email"),
