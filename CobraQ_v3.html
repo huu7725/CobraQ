@@ -399,6 +399,13 @@ const API_LIST=[
 ];
 let API=(localStorage.getItem("cq_api")||"").trim()||API_LIST[0];
 
+function networkHint(err){
+  const msg = String(err?.message||err||"");
+  if(location.protocol === "https:") return "Đang mở bằng HTTPS nên bị chặn gọi API HTTP. Hãy mở bằng http://";
+  if(/Failed to fetch|NetworkError/i.test(msg)) return `Không kết nối được API. Kiểm tra backend có chạy ở ${API_LIST[0]} không.`;
+  return "Không kết nối được API";
+}
+
 async function publicFetch(path, opts={}){
   let lastErr = null;
   for(const base of [API, ...API_LIST.filter(x=>x!==API)]){
@@ -409,7 +416,9 @@ async function publicFetch(path, opts={}){
       return r;
     }catch(e){ lastErr = e; }
   }
-  throw lastErr || new Error("Không kết nối được API");
+  const err = new Error(networkHint(lastErr));
+  err.cause = lastErr;
+  throw err;
 }
 
 const LB64="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";
@@ -473,8 +482,7 @@ async function dl(){
     setTokens(d.access_token,d.refresh_token);
     ls({email:d.user?.email||em,name:d.user?.display_name||d.user?.email||em,uid:d.user?.uid||""});
   }catch(e){
-    const hint = location.protocol === "https:" ? "Đang mở bằng HTTPS nên bị chặn gọi API HTTP. Hãy mở trang bằng HTTP (không phải HTTPS)." : "Không kết nối được server";
-    se("lerr",hint);
+    se("lerr", e?.message || "Không kết nối được server");
     console.error("Login error:", e);
   }
 }
@@ -490,7 +498,7 @@ async function dr(){
     if(!r.ok){se("rerr",d.detail||"Đăng ký thất bại");return;}
     setTokens(d.access_token,d.refresh_token);
     ls({email:d.user?.email||em,name:nm,uid:d.user?.uid||""});
-  }catch{se("rerr","Không kết nối được server");}
+  }catch(e){se("rerr", e?.message || "Không kết nối được server");}
 }
 function df(){const em=$("fe").value.trim();if(!em){se("ferr","Nhập email");return;}const us=gu();$("fok").textContent=us[em]?`Đã gửi đến ${em}. (Demo: mật khẩu mới là "123456")`:`Nếu ${em} tồn tại, bạn sẽ nhận email.`;if(us[em]){us[em].pass=btoa("123456");su2(us);}ss("forgot-ok");}
 function ls(u){S.user=u;localStorage.setItem("cq_u",JSON.stringify(u));$("aw").classList.add("gone");setTimeout(()=>{$("aw").style.display="none";$("app").classList.add("on");uui();lst().then(()=>lh().then(rp2));},480);}
@@ -664,7 +672,7 @@ async function openAI(){
       st.textContent="Chưa cấu hình";st.style.color="#991b1b";
       ss.textContent="Mở file main.py → thay YOUR_KEY_HERE bằng API key của bạn";ss.style.color="#dc2626";
     }
-  }catch{sb.className="ai-status-box notready";si.textContent="⚠️";st.textContent="Không kết nối được server";}
+  }catch(e){sb.className="ai-status-box notready";si.textContent="⚠️";st.textContent=e?.message||"Không kết nối được server";}
 }
 function tgAI(){$("tg-ai")?.classList.toggle("on");}
 async function saveAI(){

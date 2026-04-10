@@ -50,17 +50,17 @@ if not exist ".env" (
     echo  [3/5] Da co file .env.
 )
 
-:: 5) Kiem tra ket noi DB
-echo  [4/5] Kiem tra ket noi MySQL...
-python -c "from db import ping_db; import sys; ok=ping_db(); print('DB_OK' if ok else 'DB_FAIL'); sys.exit(0 if ok else 2)"
+:: 5) Kiem tra ket noi DB (SQLite/MySQL)
+echo  [4/5] Kiem tra ket noi DB...
+python -c "import os; from db import ping_db; eng=(os.getenv('DB_ENGINE','sqlite') or 'sqlite').lower(); ok=ping_db(); print(f'DB_ENGINE={eng}'); print('DB_OK' if ok else 'DB_FAIL'); import sys; sys.exit(0 if ok else 2)"
 if errorlevel 2 (
     echo.
-    echo  [CAN CHU Y] Chua ket noi duoc MySQL.
-    echo  - Hay mo file .env va kiem tra DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASSWORD
-    echo  - Dam bao MySQL dang chay.
+    echo  [CAN CHU Y] Chua ket noi duoc DB.
+    echo  - Neu DB_ENGINE=sqlite: kiem tra quyen ghi file thu muc du an.
+    echo  - Neu DB_ENGINE=mysql: kiem tra DB_HOST/DB_PORT/DB_NAME/DB_USER/DB_PASSWORD va MySQL dang chay.
     echo.
 ) else (
-    echo  [OK] Ket noi MySQL thanh cong.
+    echo  [OK] Ket noi DB thanh cong.
 )
 
 :: 6) Kiem tra thu vien parse Word

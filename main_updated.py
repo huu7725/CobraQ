@@ -17,8 +17,8 @@ import repository as repo
 from db import init_schema_from_file
 
 # ══ CẤU HÌNH API KEY ══
-# Không hardcode key trong source; lấy từ biến môi trường/.env.
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "AIzaSyBsWu6TFrwzhjQfPr6BypUNG4jKYtwxJIA").strip()
+# Chỉ lấy từ biến môi trường/.env, không hardcode trong source.
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
 # ════════════════════
 
 app = FastAPI()
@@ -95,6 +95,18 @@ def get_auth_user(authorization: str = Header(default="")) -> dict:
 def _startup_init_db():
     init_schema_from_file()
     repo.cleanup_revoked_tokens()
+
+    # Log trạng thái DB engine + AI key để dễ chẩn đoán khi chạy local/team
+    try:
+        from db import _engine as _db_engine
+        eng = _db_engine()
+    except Exception:
+        eng = "unknown"
+    print(f"[CobraQ] DB engine: {eng}")
+    if has_valid_key():
+        print("[CobraQ] Gemini AI: ON (đã có GEMINI_API_KEY)")
+    else:
+        print("[CobraQ] Gemini AI: OFF (chưa có GEMINI_API_KEY hợp lệ)")
 
     app_env = (os.getenv("APP_ENV", "dev") or "dev").strip().lower()
     if app_env in ("prod", "production") and JWT_SECRET == "change-me-in-production":
@@ -504,6 +516,31 @@ def _parse_lines(lines):
         normalize_merged_choices_in_question(q)
     return questions
 
+
+def _extract_answer_map_from_lines(lines: list[str]) -> dict:
+    """Trích bảng đáp án từ text thường: hỗ trợ dạng '1 A 2 B' hoặc cột số/cột chữ."""
+    ans_map = {}
+    for ln in lines:
+        s = (ln or "").strip()
+        if not s:
+            continue
+        # dạng: 1 A 2 B 3 C ...
+        for n, a in re.findall(r"(\d{1,4})\s*[:\-\.]?\s*([ABCD])\b", s.upper()):
+            ans_map[int(n)] = a
+
+    # dạng 2 dòng: dòng số + dòng chữ
+    for i in range(len(lines) - 1):
+        n_line = (lines[i] or "").strip()
+        a_line = (lines[i + 1] or "").strip().upper()
+        nums = re.findall(r"\b\d{1,4}\b", n_line)
+        letters = re.findall(r"\b[ABCD]\b", a_line)
+        if nums and letters and len(nums) == len(letters):
+            for n, a in zip(nums, letters):
+                ans_map[int(n)] = a
+
+    return ans_map
+
+
 def parse_docx_without_docx(content: bytes) -> list:
     # Fallback khi thiếu python-docx: đọc XML trực tiếp từ file .docx
     import html
@@ -572,19 +609,29 @@ def parse_docx_without_docx(content: bytes) -> list:
         qid += 1
         questions.append({"id": qid, "question": q_text, "choices": choices, "answer": answer, "explanation": ""})
 
-    if questions:
-        for q in questions:
-            normalize_merged_choices_in_question(q)
-        return questions
-
-    # fallback cuối: parse text thường
     x = re.sub(r"</w:p>", "\n", xml)
     x = re.sub(r"</w:tr>", "\n", x)
     x = re.sub(r"</w:tc>", "\n", x)
     text = re.sub(r"<[^>]+>", "", x)
     text = html.unescape(text)
     lines = [ln.strip() for ln in text.replace("\r", "\n").split("\n") if ln.strip()]
-    return _parse_lines(lines)
+
+    if questions:
+        # map thêm đáp án từ bảng đáp án text nếu có
+        answer_map = _extract_answer_map_from_lines(lines)
+        for q in questions:
+            if not q.get("answer") and q.get("id") in answer_map:
+                q["answer"] = answer_map[q["id"]]
+            normalize_merged_choices_in_question(q)
+        return questions
+
+    # fallback cuối: parse text thường
+    parsed = _parse_lines(lines)
+    answer_map = _extract_answer_map_from_lines(lines)
+    for q in parsed:
+        if not q.get("answer") and q.get("id") in answer_map:
+            q["answer"] = answer_map[q["id"]]
+    return parsed
 
 
 def parse_word(content: bytes) -> list:
