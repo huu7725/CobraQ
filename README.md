@@ -150,3 +150,9 @@ Không nên commit:
 - App đã hỗ trợ cơ chế migration nhẹ cho bảng `users` khi startup.
 - Với file Word bảng lớn (ví dụ PLDC), hệ thống đã tối ưu parser để nhận câu hỏi tốt hơn.
 - Nếu cần độ chính xác cao hơn nữa về map đáp án, ưu tiên file `.docx` có định dạng đáp án rõ (bold/color/highlight hoặc bảng đáp án chuẩn).
+## 11) thêm tính năng sau để làm về sau 
+- hỗ trợ sinh kết quả từ những đề có câu hỏi hoặc mà chưa có đáp án
+- hỗ trợ các đề có cách công thức hay hình ví dụ như toán lí hóa sinh
+- hỗ trợ các file ảnh để làm
+- hỗ trợ thêm các sound hoặc viết tự luận phục vụ các môn ngoại ngữ như tiếng anh, tiếng pháp
+- cơ chế cú pháp còn cứng ngắt
