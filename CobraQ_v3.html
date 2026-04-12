@@ -4,6 +4,9 @@
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>CobraQ</title>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Outfit:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
 <style>
 :root{--bg:#f0f2f9;--w:#fff;--sbw:234px;--p:#5b21b6;--p2:#7c3aed;--p3:#ede9fe;--pd:#3b0764;--g:#059669;--r:#dc2626;--a:#d97706;--t:#1e1b4b;--t2:#6b7280;--t3:#9ca3af;--bd:#e5e7eb;--sh:0 2px 16px rgba(91,33,182,.08);--shl:0 8px 32px rgba(91,33,182,.14);--rad:16px}
 *{box-sizing:border-box;margin:0;padding:0}html,body{height:100%;font-family:'Plus Jakarta Sans',sans-serif;color:var(--t)}
@@ -42,6 +45,7 @@ body{background:var(--bg);overflow:hidden}
 .flnk{text-align:right;margin-top:-5px;margin-bottom:13px}.flnk a{font-size:12px;color:var(--p);cursor:pointer;font-weight:600}
 .af{text-align:center;margin-top:16px;font-size:13px;color:var(--t2)}.af a{color:var(--p);font-weight:700;cursor:pointer}
 #app{display:flex;height:100vh;opacity:0;transition:opacity .5s}#app.on{opacity:1}
+body.logged-in #aw{display:none!important;visibility:hidden!important;opacity:0!important;pointer-events:none!important;z-index:-1!important;inset:auto!important;width:0!important;height:0!important;overflow:hidden!important}
 .sbr{width:var(--sbw);min-height:100vh;background:#fff;border-right:1px solid var(--bd);display:flex;flex-direction:column;padding:16px 12px;position:fixed;left:0;top:0;bottom:0;z-index:50;overflow-y:auto}
 .sbr::-webkit-scrollbar{width:3px}.sbr::-webkit-scrollbar-thumb{background:#e5e7eb;border-radius:99px}
 .sbl{display:flex;align-items:center;gap:9px;padding:4px 8px;margin-bottom:20px;flex-shrink:0}
@@ -201,9 +205,7 @@ body{background:var(--bg);overflow:hidden}
 .mav{width:68px;height:68px;border-radius:50%;background:linear-gradient(135deg,var(--p),#a78bfa);display:flex;align-items:center;justify-content:center;color:#fff;font-size:26px;font-weight:800;margin:0 auto 12px;box-shadow:0 7px 22px rgba(91,33,182,.22)}
 .inp{padding:10px 13px;border-radius:9px;border:2px solid var(--bd);font-size:14px;font-family:'Plus Jakarta Sans',sans-serif;color:var(--t);outline:none;transition:border .16s;width:100%}
 .inp:focus{border-color:var(--p)}
-.toast{position:fixed;bottom:24px;right:24px;border-radius:12px;padding:11px 18px;font-size:13px;font-weight:600;z-index:999;transform:translateX(130px);transition:transform .32s cubic-bezier(.34,1.56,.64,1);display:flex;align-items:center;gap:7px;box-shadow:var(--shl)}
-.toast.on{transform:translateX(0)}.toast.ok{background:#065f46;color:#fff;border:1px solid var(--g)}.toast.err{background:#991b1b;color:#fff;border:1px solid var(--r)}.toast.info{background:#1e1b4b;color:#fff;border:1px solid #4338ca}
-.page{animation:pg .26s ease}@keyframes pg{from{opacity:0;transform:translateY(9px)}to{opacity:1;transform:none}}
+undefined.page{animation:pg .26s ease}@keyframes pg{from{opacity:0;transform:translateY(9px)}to{opacity:1;transform:none}}
 .stg>*{animation:fu .28s ease both}
 .stg>*:nth-child(1){animation-delay:.04s}.stg>*:nth-child(2){animation-delay:.08s}.stg>*:nth-child(3){animation-delay:.12s}.stg>*:nth-child(4){animation-delay:.16s}.stg>*:nth-child(5){animation-delay:.20s}.stg>*:nth-child(6){animation-delay:.24s}
 .pls{animation:pls 2.4s infinite}@keyframes pls{0%,100%{box-shadow:0 0 0 0 rgba(91,33,182,.22)}60%{box-shadow:0 0 0 10px rgba(91,33,182,0)}}
@@ -325,8 +327,8 @@ body{background:var(--bg);overflow:hidden}
 <!-- Profile Modal -->
 <div class="mov" id="pm" onclick="if(event.target===this)cm('pm')">
   <div class="mo">
-    <div class="mav" id="mav">C</div>
-    <div style="text-align:center;margin-bottom:20px"><div style="font-size:17px;font-weight:800" id="mnm">CobraQ</div><div style="font-size:12px;color:var(--t3)" id="mem"></div></div>
+    <div style="display:flex;justify-content:center;margin-bottom:8px"><label for="avf" style="cursor:pointer;position:relative;display:inline-block"><div class="mav" id="mav">C</div><span style="position:absolute;right:-2px;bottom:-2px;background:var(--p);color:#fff;border-radius:99px;padding:2px 7px;font-size:10px;font-weight:700">Ảnh</span></label><input id="avf" type="file" accept="image/*" style="display:none" onchange="onAvatarPick(this)"></div>
+    <div style="text-align:center;margin-bottom:20px"><div style="font-size:17px;font-weight:800" id="mnm">CobraQ</div><div style="font-size:12px;color:var(--t3)" id="mem"></div><button class="bo" style="margin-top:9px;padding:7px 12px;font-size:12px" onclick="$('avf').click()">📷 Đổi ảnh đại diện</button></div>
     <div style="display:flex;flex-direction:column;gap:11px">
       <div><div style="font-size:11px;font-weight:700;color:var(--t3);margin-bottom:4px">TÊN HIỂN THỊ</div><input class="inp" id="mni" oninput="pn(this.value)" placeholder="Nhập tên..."></div>
       <div style="display:flex;gap:9px"><button class="bp" style="flex:1" onclick="sv()">Lưu</button><button class="bo" style="flex:1" onclick="cm('pm')">Đóng</button></div>
@@ -365,7 +367,14 @@ body{background:var(--bg);overflow:hidden}
         <div class="qpm-title" id="qpm-title">Xem & Chỉnh sửa câu hỏi</div>
         <div class="qpm-sub" id="qpm-sub">Đang tải...</div>
       </div>
-      <input class="qpm-search" id="qpm-search" placeholder="🔍 Tìm câu hỏi..." oninput="filterQList(this.value)">
+      <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+        <input class="qpm-search" id="qpm-search" placeholder="🔍 Tìm câu hỏi..." oninput="filterQList()">
+        <button class="bo" id="qpm-clear-btn" style="padding:7px 10px;font-size:12px;display:none" onclick="clearQSearch()">✕</button>
+        <button class="bo" id="qpm-low-btn" style="padding:7px 10px;font-size:12px" onclick="toggleQpmLowConf()">⚠ Low conf</button>
+        <button class="bo" id="qpm-math-btn" style="padding:7px 10px;font-size:12px" onclick="toggleQpmMath()">∑ Math</button>
+        <button class="bo" id="qpm-unrev-btn" style="padding:7px 10px;font-size:12px" onclick="toggleQpmUnreviewed()">⏳ Chưa duyệt</button>
+      </div>
+      <button class="bo" id="qpm-batch-review-btn" style="padding:7px 10px;font-size:12px;flex-shrink:0" onclick="batchReviewFiltered()">✅ Duyệt đang lọc</button>
       <button class="bo" style="padding:7px 13px;font-size:12px;flex-shrink:0" onclick="cm('qpm')">✕ Đóng</button>
     </div>
     <div class="qpm-body">
@@ -423,9 +432,9 @@ async function publicFetch(path, opts={}){
 
 const LB64="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";
 const COLS=["c0","c1","c2","c3","c4","c5"],ICNS=["📚","📖","📝","📋","📄","🗒️"];
-const S={pg:"dashboard",user:null,nq:10,sid:null,qs:[],cur:0,ans:{},cm2:{},tl:0,ti:null,res:null,st:0,
+const S={pg:"dashboard",user:null,nq:10,customMinutes:0,sid:null,qs:[],cur:0,ans:{},cm2:{},tl:0,deadlineAt:0,ti:null,res:null,st:0,blurPenaltySec:15,blurCount:0,lastHiddenAt:0,
   stats:{total_questions:0,with_answer:0,total_sessions:0,avg_score:0,best_score:0,files:[],ai_available:false,ai_enabled:true},
-  hist:[],an:localStorage.getItem("cq_an")==="true",sf:"",accessToken:localStorage.getItem("cq_at")||"",refreshToken:localStorage.getItem("cq_rt")||""};
+  hist:[],an:localStorage.getItem("cq_an")==="true",anMode:(localStorage.getItem("cq_an_mode")||"adaptive"),anDelay:Math.max(250,parseInt(localStorage.getItem("cq_an_delay")||"900",10)||900),anTimer:null,sf:"",accessToken:localStorage.getItem("cq_at")||"",refreshToken:localStorage.getItem("cq_rt")||""};
 
 function setTokens(accessToken, refreshToken){
   S.accessToken = accessToken || "";
@@ -459,7 +468,8 @@ async function apiFetch(pathOrUrl, opts={}){
 (()=>{const ab=document.getElementById("ab");for(let i=0;i<14;i++){const p=document.createElement("div");p.className="part";p.style.cssText=`left:${Math.random()*100}%;width:${2+Math.random()*3}px;height:${2+Math.random()*3}px;animation-duration:${7+Math.random()*9}s;animation-delay:${Math.random()*7}s`;ab.appendChild(p);}})();
 
 const $=id=>document.getElementById(id);
-function tst(m,t="ok"){const e=$("tst");e.innerHTML=(t==="ok"?"✅ ":t==="info"?"🤖 ":"❌ ")+m;e.className=`toast on ${t}`;clearTimeout(tst._t);tst._t=setTimeout(()=>e.classList.remove("on"),3200);}
+function tst(m,t="ok"){if(t!=="err"&&t!=="important")return;const e=$("tst");e.style.display='flex';const isErr=t==="err";e.innerHTML=(isErr?"❌ ":"✅ ")+m;e.className=`toast on ${isErr?'err':'ok'}`;clearTimeout(tst._t);tst._t=setTimeout(()=>{e.classList.remove("on");setTimeout(()=>{e.style.display='none';},260);},3000);}
+function setAuthVisible(show){const aw=$("aw"),app=$("app");if(!aw||!app)return;if(show){document.body.classList.remove('logged-in');aw.style.cssText='';aw.classList.remove('gone');aw.style.display='flex';app.classList.remove('on');}else{document.body.classList.add('logged-in');aw.classList.add('gone');aw.style.display='none';aw.style.opacity='0';aw.style.visibility='hidden';aw.style.pointerEvents='none';aw.style.width='0';aw.style.height='0';aw.style.inset='auto';app.classList.add('on');}}
 function om(id){$(id).classList.add("on")}function cm(id){$(id).classList.remove("on")}
 function hr(){const h=new Date().getHours();return h<12?"Chào buổi sáng":h<18?"Chào buổi chiều":"Chào buổi tối"}
 function fc(i){return COLS[i%COLS.length]}function fi2(i){return ICNS[i%ICNS.length]}
@@ -468,7 +478,15 @@ function ss(s){document.querySelectorAll(".asc").forEach(e=>e.classList.remove("
 function togglePw(id,el){const i=$(id);i.type=i.type==="password"?"text":"password";el.textContent=i.type==="password"?"👁":"🙈";}
 function ce(id){const e=$(id);if(e){e.classList.remove("on");e.textContent="";}}
 function se(id,m){const e=$(id);if(e){e.textContent=m;e.classList.add("on");}}
+function escHtml(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
+function renderRichText(obj, plainField, richField){const rich=String(obj?.[richField]||'').trim();const plain=String(obj?.[plainField]||'').trim();const src=rich||plain;return escHtml(src).replace(/\n/g,'<br>');}
+function renderMathInScope(root){try{if(typeof renderMathInElement!=='function'||!root)return;renderMathInElement(root,{delimiters:[{left:'$$',right:'$$',display:true},{left:'\\(',right:'\\)',display:false},{left:'\\[',right:'\\]',display:true},{left:'$',right:'$',display:false}],throwOnError:false,strict:'ignore'});}catch(e){}}
 function cs2(v){const b=$("sb2"),l=$("slb");if(!b)return;if(!v){b.style.width="0";l.textContent="";return;}let s=0;if(v.length>=6)s++;if(v.length>=10)s++;if(/[A-Z]/.test(v))s++;if(/[0-9]/.test(v))s++;if(/[^A-Za-z0-9]/.test(v))s++;const c=[["0%","",""],["20%","#ef4444","Yếu"],["40%","#f97316","TB"],["60%","#eab308","Khá"],["80%","#22c55e","Tốt"],["100%","#10b981","Mạnh"]];b.style.width=c[s][0];b.style.background=c[s][1];l.textContent=c[s][2];l.style.color=c[s][1];}
+function initialsFromName(n){const s=String(n||"").trim();if(!s)return"C";const p=s.split(/\s+/).filter(Boolean);if(p.length===1)return p[0][0]?.toUpperCase()||"C";return ((p[0][0]||"")+(p[p.length-1][0]||"")).toUpperCase();}
+function escAttr(v){return String(v||"").replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function avatarMarkup(u){const av=(u&&u.avatar_url)?String(u.avatar_url).trim():"";const n=(u&&u.name)||"Bạn";const ini=initialsFromName(n);if(!av)return ini;const safe=escAttr(av);return `<span style="position:relative;display:flex;align-items:center;justify-content:center;width:100%;height:100%;border-radius:inherit;overflow:hidden">${ini}<img src="${safe}" alt="" loading="lazy" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:inherit" onerror="this.remove()"></span>`;}
+async function saveProfileRemote(payload={}){const body={display_name:payload.display_name??(S.user?.name||""),avatar_url:payload.avatar_url??(S.user?.avatar_url||"")};const r=await apiFetch(`/auth/profile`,{method:"PUT",headers:authHeaders({"Content-Type":"application/json"}),body:JSON.stringify(body)});const d=await r.json();if(!r.ok)throw new Error(d.detail||"Không lưu được hồ sơ");const me=d.user||{};S.user={...S.user,name:me.display_name||S.user?.name||me.email||"Bạn",email:me.email||S.user?.email||"",uid:me.uid||S.user?.uid||"",avatar_url:me.avatar_url||""};localStorage.setItem("cq_u",JSON.stringify(S.user));}
+async function onAvatarPick(inp){const f=inp?.files?.[0];if(!f)return;if(!/^image\//i.test(f.type)){tst("Vui lòng chọn file ảnh","err");inp.value="";return;}if(f.size>2*1024*1024){tst("Ảnh tối đa 2MB","err");inp.value="";return;}const old=S.user?.avatar_url||"";const rd=new FileReader();rd.onload=async()=>{try{const dataUrl=String(rd.result||"");S.user.avatar_url=dataUrl;uui();await saveProfileRemote({avatar_url:dataUrl});tst("Đã cập nhật avatar","important");}catch(e){S.user.avatar_url=old;uui();tst(e?.message||"Lưu avatar thất bại","err");}finally{inp.value="";}};rd.onerror=()=>{tst("Không đọc được ảnh","err");inp.value="";};rd.readAsDataURL(f);}
 function gu(){try{return JSON.parse(localStorage.getItem("cq_us")||"{}")}catch{return {}}}
 function su2(u){localStorage.setItem("cq_us",JSON.stringify(u))}
 async function dl(){
@@ -480,7 +498,7 @@ async function dl(){
     const d=await r.json();
     if(!r.ok){se("lerr",d.detail||"Đăng nhập thất bại");return;}
     setTokens(d.access_token,d.refresh_token);
-    ls({email:d.user?.email||em,name:d.user?.display_name||d.user?.email||em,uid:d.user?.uid||""});
+    ls({email:d.user?.email||em,name:d.user?.display_name||d.user?.email||em,uid:d.user?.uid||"",avatar_url:d.user?.avatar_url||""});
   }catch(e){
     se("lerr", e?.message || "Không kết nối được server");
     console.error("Login error:", e);
@@ -497,11 +515,11 @@ async function dr(){
     const d=await r.json();
     if(!r.ok){se("rerr",d.detail||"Đăng ký thất bại");return;}
     setTokens(d.access_token,d.refresh_token);
-    ls({email:d.user?.email||em,name:nm,uid:d.user?.uid||""});
+    ls({email:d.user?.email||em,name:nm,uid:d.user?.uid||"",avatar_url:d.user?.avatar_url||""});
   }catch(e){se("rerr", e?.message || "Không kết nối được server");}
 }
 function df(){const em=$("fe").value.trim();if(!em){se("ferr","Nhập email");return;}const us=gu();$("fok").textContent=us[em]?`Đã gửi đến ${em}. (Demo: mật khẩu mới là "123456")`:`Nếu ${em} tồn tại, bạn sẽ nhận email.`;if(us[em]){us[em].pass=btoa("123456");su2(us);}ss("forgot-ok");}
-function ls(u){S.user=u;localStorage.setItem("cq_u",JSON.stringify(u));$("aw").classList.add("gone");setTimeout(()=>{$("aw").style.display="none";$("app").classList.add("on");uui();lst().then(()=>lh().then(rp2));},480);}
+function ls(u){S.user=u||{};if(!S.user.name)S.user.name=S.user.email||"Bạn";if(!S.user.avatar_url)S.user.avatar_url="";localStorage.setItem("cq_u",JSON.stringify(S.user));setAuthVisible(false);uui();lst().then(()=>lh().then(rp2));}
 async function lo(){
   try{
     if(S.refreshToken){
@@ -511,11 +529,11 @@ async function lo(){
   localStorage.removeItem("cq_u");
   setTokens("","");
   S.user=null;
-  cm("pm");$("aw").style.display="flex";setTimeout(()=>$("aw").classList.remove("gone"),10);$("app").classList.remove("on");stab("login");tst("Đã đăng xuất");
+  cm("pm");setAuthVisible(true);stab("login");tst("Đã đăng xuất");
 }
-function uui(){if(!S.user)return;const n=S.user.name||"Bạn";$("sav").textContent=n[0]?.toUpperCase()||"C";$("snm").textContent=n;$("mav").textContent=n[0]?.toUpperCase()||"C";$("mnm").textContent=n;$("mem").textContent=S.user.email||"";if($("mni"))$("mni").value=n;ubf();}
-function pn(v){$("mav").textContent=v[0]?.toUpperCase()||"C";$("mnm").textContent=v||"CobraQ";}
-function sv(){const v=$("mni").value.trim();if(!v)return;S.user.name=v;localStorage.setItem("cq_u",JSON.stringify(S.user));const us=gu();if(us[S.user.email]){us[S.user.email].name=v;su2(us);}uui();cm("pm");tst("Đã lưu tên!");}
+function uui(){if(!S.user)return;const n=S.user.name||"Bạn";$("sav").innerHTML=avatarMarkup(S.user);$("snm").textContent=n;$("mav").innerHTML=avatarMarkup(S.user);$("mnm").textContent=n;$("mem").textContent=S.user.email||"";if($("mni"))$("mni").value=n;ubf();}
+function pn(v){const pv={...(S.user||{}),name:v||""};$("mav").innerHTML=avatarMarkup(pv);$("mnm").textContent=v||"CobraQ";}
+async function sv(){const v=$("mni").value.trim();if(!v)return;const old=S.user?.name||"";S.user.name=v;uui();try{await saveProfileRemote({display_name:v});cm("pm");tst("Đã lưu tên!","important");}catch(e){S.user.name=old;uui();tst(e?.message||"Lưu tên thất bại","err");}}
 function ubf(){const files=S.stats.files||[],sec=$("sb-fs"),el=$("sb-fl");if(!sec||!el)return;if(!files.length){sec.style.display="none";return;}sec.style.display="block";el.innerHTML=files.map((f,i)=>`<div class="sbf ${S.sf===f.id?'on':''}" onclick="libOpenQ('${f.id}')"><div class="sbfi ${fc(i)}">${fi2(i)}</div><div class="sbfn" title="${f.name}">${f.name}</div>${f.parse_method==='vision_ai'?'<div class="ai-dot"></div>':''}<div class="sbfc">${f.count}</div></div>`).join('');}
 function selF(id){S.sf=S.sf===id?"":id;ubf();if(S.pg==="quiz-start"||S.pg==="upload")rp2();}
 /** Nhấn đề trong sidebar THƯ VIỆN ĐỀ → chọn đề + mở xem/sửa câu hỏi (giống nút 👁 Xem). */
@@ -530,11 +548,40 @@ function libOpenQ(id){
 function nv(p){S.pg=p;document.querySelectorAll(".sbi").forEach(e=>e.classList.remove("on"));const e=$("n-"+p);if(e)e.classList.add("on");if(p==="history")lh().then(rp2);else if(p==="dashboard")lst().then(rp2);else rp2();$("main").scrollTo({top:0,behavior:"smooth"});}
 async function lst(){try{const r=await apiFetch(`/stats`,{headers:authHeaders()});S.stats=await r.json();ubf();}catch{S.stats={total_questions:0,with_answer:0,total_sessions:0,avg_score:0,best_score:0,files:[],ai_available:false,ai_enabled:true};}}
 async function lh(){try{const r=await apiFetch(`${API}/history`,{headers:authHeaders()});S.hist=(await r.json()).reverse();}catch{S.hist=[];}}
-function rp2(){const m=$("main");({dashboard:rd,"quiz-start":rqs,quiz:rqz,result:rrs,history:rht,upload:rup,settings:rset})[S.pg]?.(m);if(S.pg==="dashboard")afd();if(S.pg==="history")afh();if(S.pg==="upload")bdu();uui();}
+function rp2(){const m=$("main");({dashboard:rd,"quiz-start":rqs,quiz:rqz,result:rrs,history:rht,upload:rup,settings:rset})[S.pg]?.(m);if(S.pg==="dashboard")afd();if(S.pg==="history")afh();if(S.pg==="upload")bdu();uui();renderMathInScope(m);}
 
 // ── DASHBOARD ──
+function _parseVNDateToLocal(v){
+  const s=String(v||'').trim();
+  const m=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{1,2}))?$/);
+  if(!m)return null;
+  const dd=Number(m[1]),MM=Number(m[2])-1,yy=Number(m[3]),hh=Number(m[4]||0),mi=Number(m[5]||0);
+  const d=new Date(yy,MM,dd,hh,mi,0,0);
+  return isNaN(d.getTime())?null:d;
+}
+function _ymdLocal(d){
+  const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0'),dd=String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${dd}`;
+}
+function _thuLabel(d){
+  const w=d.getDay();
+  return w===0?'CN':`T${w+1}`;
+}
 function rd(m){
-  const s=S.stats,h7=S.hist.slice(0,7).reverse(),days=["T2","T3","T4","T5","T6","T7","CN"],cd=days.map((d,i)=>({l:d,v:h7[i]?.score||0})),mx=Math.max(...cd.map(d=>d.v),1);
+  const s=S.stats;
+  const today=new Date(); today.setHours(0,0,0,0);
+  const dayKeys=[];
+  for(let i=6;i>=0;i--){const d=new Date(today);d.setDate(today.getDate()-i);dayKeys.push({key:_ymdLocal(d),label:_thuLabel(d)});}
+  const agg={}; dayKeys.forEach(x=>agg[x.key]=0);
+  for(const h of (S.hist||[])){
+    const d=_parseVNDateToLocal(h.date);
+    if(!d)continue;
+    d.setHours(0,0,0,0);
+    const k=_ymdLocal(d);
+    if(Object.prototype.hasOwnProperty.call(agg,k)) agg[k]+=Number(h.score||0);
+  }
+  const cd=dayKeys.map(x=>({l:x.label,v:agg[x.key]||0}));
+  const mx=Math.max(...cd.map(d=>d.v),1);
   const bars=cd.map(d=>{const h=Math.round((d.v/mx)*130);return`<div class="bc"><div class="bar" style="height:${h}px"><div class="btt">${d.v} đúng</div></div><div class="bl2">${d.l}</div></div>`;}).join('');
   const cT=S.hist.reduce((a,h)=>a+h.score,0),tT=S.hist.reduce((a,h)=>a+h.total,0),acc=tT?Math.round(cT/tT*100):0,ci=2*Math.PI*42,dash=(acc/100)*ci;
   const fps=(s.files||[]).map((f,i)=>`<div class="fp ${S.sf===f.id?'on':''}" onclick="selF('${f.id}')">${fi2(i)} ${f.name} (${f.count})</div>`).join('');
@@ -560,25 +607,32 @@ function afd(){setTimeout(()=>document.querySelectorAll('.bar').forEach(b=>{cons
 function rqs(m){
   const s=S.stats,files=s.files||[],av=S.sf?(files.find(f=>f.id===S.sf)?.count||0):s.total_questions;
   const fcards=files.length>0?`<div class="ct" style="margin-bottom:12px;margin-top:20px">CHỌN ĐỀ ÔN TẬP</div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:9px;margin-bottom:20px"><div class="fp ${!S.sf?'on':''}" style="padding:12px 14px;border-radius:12px;text-align:center" onclick="selF('')">📚 Tất cả đề<br><span style="font-size:11px;opacity:.8">${s.total_questions} câu</span></div>${files.map((f,i)=>`<div class="fp ${S.sf===f.id?'on':''}" style="padding:12px 14px;border-radius:12px;text-align:center" onclick="selF('${f.id}')">${fi2(i)} ${f.name}<br><span style="font-size:11px;opacity:.8">${f.count} câu</span></div>`).join('')}</div>`:'';
-  m.innerHTML=`<div class="page"><div class="tb"><div><div class="pt">Làm bài</div><div class="ps">${S.sf?(files.find(f=>f.id===S.sf)?.name||''):'Tất cả đề'}</div></div></div><div style="max-width:540px;margin:0 auto"><div class="card stg"><div class="ct" style="margin-bottom:14px">SỐ CÂU HỎI</div><div class="dg2" style="grid-template-columns:repeat(5,1fr);margin-bottom:20px">${[5,10,15,20,30].map(n=>`<div class="qd" style="height:44px;font-size:13px;border-radius:9px;${S.nq===n?'background:var(--p);color:#fff':''}" onclick="sn3(${n})">${n}</div>`).join('')}</div><div style="background:var(--bg);border-radius:11px;padding:14px;margin-bottom:20px;display:flex;gap:20px;justify-content:center"><div style="text-align:center"><div style="font-family:Outfit;font-size:20px;font-weight:800;color:var(--p)">${av}</div><div style="font-size:11px;color:var(--t3)">Có sẵn</div></div><div style="width:1px;background:var(--bd)"></div><div style="text-align:center"><div style="font-family:Outfit;font-size:20px;font-weight:800;color:var(--a)">${S.nq}</div><div style="font-size:11px;color:var(--t3)">Sẽ thi</div></div><div style="width:1px;background:var(--bd)"></div><div style="text-align:center"><div style="font-family:Outfit;font-size:20px;font-weight:800;color:var(--g)">${S.nq*1.5}</div><div style="font-size:11px;color:var(--t3)">Phút</div></div></div>${fcards}<button class="bp" style="width:100%;padding:13px;font-size:15px" onclick="sq3()" ${av===0?'disabled':''}>${av===0?'📂 Cần upload đề thi trước':'🚀 Bắt đầu làm bài'}</button></div></div></div>`;
+  const customMin=(S.customMinutes||0)>0?S.customMinutes:Math.round((S.nq*90)/60);
+  m.innerHTML=`<div class="page"><div class="tb"><div><div class="pt">Làm bài</div><div class="ps">${S.sf?(files.find(f=>f.id===S.sf)?.name||''):'Tất cả đề'}</div></div></div><div style="max-width:540px;margin:0 auto"><div class="card stg"><div class="ct" style="margin-bottom:14px">SỐ CÂU HỎI</div><div class="dg2" style="grid-template-columns:repeat(5,1fr);margin-bottom:12px">${[5,10,15,20,30].map(n=>`<div class="qd" style="height:44px;font-size:13px;border-radius:9px;${S.nq===n&&S.customMinutes===0?'background:var(--p);color:#fff':''}" onclick="sn3(${n})">${n}</div>`).join('')}</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px"><div><div style="font-size:11px;color:var(--t3);margin-bottom:4px;font-weight:700">TUỲ CHỈNH SỐ CÂU</div><input class="inp" type="number" min="1" max="300" value="${S.nq}" oninput="onCustomNQ(this.value)" style="padding:9px 11px"></div><div><div style="font-size:11px;color:var(--t3);margin-bottom:4px;font-weight:700">TUỲ CHỈNH THỜI GIAN (PHÚT)</div><input class="inp" type="number" min="1" max="600" value="${customMin}" oninput="onCustomMin(this.value)" style="padding:9px 11px"></div></div><div style="background:var(--bg);border-radius:11px;padding:14px;margin-bottom:20px;display:flex;gap:20px;justify-content:center"><div style="text-align:center"><div style="font-family:Outfit;font-size:20px;font-weight:800;color:var(--p)">${av}</div><div style="font-size:11px;color:var(--t3)">Có sẵn</div></div><div style="width:1px;background:var(--bd)"></div><div style="text-align:center"><div style="font-family:Outfit;font-size:20px;font-weight:800;color:var(--a)">${S.nq}</div><div style="font-size:11px;color:var(--t3)">Sẽ thi</div></div><div style="width:1px;background:var(--bd)"></div><div style="text-align:center"><div style="font-family:Outfit;font-size:20px;font-weight:800;color:var(--g)">${customMin}</div><div style="font-size:11px;color:var(--t3)">Phút</div></div></div>${fcards}<button class="bp" style="width:100%;padding:13px;font-size:15px" onclick="${av===0?"nv('upload')":"sq3()"}">${av===0?'📂 Cần upload đề thi trước':'🚀 Bắt đầu làm bài'}</button></div></div></div>`;
 }
-function sn3(n){S.nq=n;rp2();}
-async function qs3(n){S.nq=n;await sq3();}
-async function sq3(){try{const url=`${API}/quiz/start?num=${S.nq}${S.sf?`&file_id=${encodeURIComponent(S.sf)}`:''}`;const r=await apiFetch(url,{headers:authHeaders()});if(!r.ok){tst("Không đủ câu hỏi!","err");return;}const d=await r.json();S.sid=d.session_id;S.qs=d.questions;S.ans={};S.cm2={};S.cur=0;S.tl=S.nq*90;S.st=Date.now();S.pg="quiz";document.querySelectorAll(".sbi").forEach(e=>e.classList.remove("on"));rp2();stt3();}catch{tst("Lỗi kết nối server!","err");}}
+function sn3(n){S.nq=n;S.customMinutes=0;rp2();}
+function onCustomNQ(v){const n=Math.max(1,Math.min(300,parseInt(v,10)||0));if(!n)return;S.nq=n;}
+function onCustomMin(v){const n=Math.max(1,Math.min(600,parseInt(v,10)||0));if(!n){S.customMinutes=0;return;}S.customMinutes=n;}
+function calcQuizTotalSeconds(){if((S.customMinutes||0)>0)return Math.max(60,Math.floor(S.customMinutes*60));return Math.max(60,S.nq*90);}
+async function qs3(n){S.nq=n;S.customMinutes=0;await sq3();}
+async function sq3(){try{const url=`${API}/quiz/start?num=${S.nq}${S.sf?`&file_id=${encodeURIComponent(S.sf)}`:''}`;const r=await apiFetch(url,{headers:authHeaders()});if(!r.ok){tst("Không đủ câu hỏi!","err");return;}const d=await r.json();S.sid=d.session_id;S.qs=d.questions;S.ans={};S.cm2={};S.cur=0;S.tl=calcQuizTotalSeconds();S.st=Date.now();S.deadlineAt=Date.now()+(S.tl*1000);S.blurCount=0;S.lastHiddenAt=0;S.pg="quiz";document.querySelectorAll(".sbi").forEach(e=>e.classList.remove("on"));rp2();stt3();}catch{tst("Lỗi kết nối server!","err");}}
 
 // ── QUIZ ──
 function rqz(m){
   const q=S.qs[S.cur];if(!q)return;
   const pc=((S.cur+1)/S.qs.length*100).toFixed(0),mm=String(Math.floor(S.tl/60)).padStart(2,'0'),ss=String(S.tl%60).padStart(2,'0'),w=S.tl<60,ci=2*Math.PI*38,d=(S.tl/(S.nq*90))*ci;
-  const chs=q.choices.map(c=>{const sel=S.ans[S.cur]===c.label,cor=S.cm2[S.cur];let cl="cb2";if(cor){if(c.label===cor)cl+=" cor";else if(sel)cl+=" wrg";}else if(sel)cl+=" sel";return`<button class="${cl}" onclick="pk3('${c.label}')" ${cor?'disabled':''}><span class="cl">${c.label}</span><span>${c.text}</span></button>`;}).join('');
+  const qText=renderRichText(q,'question','question_rich');
+  const lowConf=Number(q.parse_confidence||0)>0 && Number(q.parse_confidence||0)<0.7;
+  const chs=q.choices.map(c=>{const sel=S.ans[S.cur]===c.label,cor=S.cm2[S.cur];let cl="cb2";if(cor){if(c.label===cor)cl+=" cor";else if(sel)cl+=" wrg";}else if(sel)cl+=" sel";const richTxt=escHtml(String(c?.text_rich||c?.text||'')).replace(/\n/g,'<br>');return`<button class="${cl}" onclick="pk3('${c.label}')" ${cor?'disabled':''}><span class="cl">${c.label}</span><span>${richTxt}</span></button>`;}).join('');
   const dots=S.qs.map((_,i)=>`<div class="qd ${i===S.cur?'cur':S.ans[i]!==undefined?'ans':''}" onclick="gt3(${i})">${i+1}</div>`).join('');
-  m.innerHTML=`<div class="page"><div class="ql"><div class="qc"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px"><span style="font-size:12px;color:var(--t3)">Câu <b style="color:var(--t)">${S.cur+1}</b>/${S.qs.length}</span><span style="font-size:12px;color:var(--t3)"><b style="color:var(--p)">${Object.keys(S.ans).length}</b> đã chọn</span></div><div class="qpb"><div class="qpf" style="width:${pc}%"></div></div><div class="qnl">CÂU ${S.cur+1}</div><div class="qt">${q.question}</div>${chs}<div class="qnv"><button class="bo" onclick="gt3(${S.cur-1})" ${S.cur===0?'disabled':''}>◀ Trước</button><button class="bd2" onclick="csb3()">Nộp bài</button>${S.cur<S.qs.length-1?`<button class="bp" onclick="gt3(${S.cur+1})">Tiếp ▶</button>`:`<button class="bp" style="background:var(--g)" onclick="subq3()">Xong ✓</button>`}</div></div><div class="qs2"><div class="tc2"><div class="ct" style="margin-bottom:9px">THỜI GIAN</div><div class="tr"><svg width="84" height="84" viewBox="0 0 84 84"><circle class="tcb" cx="42" cy="42" r="38"/><circle class="tcc" cx="42" cy="42" r="38" stroke="${w?'#dc2626':'var(--p)'}" stroke-dasharray="${ci}" stroke-dashoffset="${ci-d}" id="tcc"/></svg><div class="tct" id="tct" style="color:${w?'var(--r)':'var(--t)'}">${mm}:${ss}</div></div>${w?'<div style="font-size:11px;color:var(--r);font-weight:700">⚠ Sắp hết giờ!</div>':''}</div><div class="card"><div class="ct" style="margin-bottom:9px">CÂU HỎI</div><div class="dg2">${dots}</div></div></div></div></div>`;
+  m.innerHTML=`<div class="page"><div class="ql"><div class="qc"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px"><span style="font-size:12px;color:var(--t3)">Câu <b style="color:var(--t)">${S.cur+1}</b>/${S.qs.length}</span><span style="font-size:12px;color:var(--t3)"><b style="color:var(--p)">${Object.keys(S.ans).length}</b> đã chọn</span></div><div class="qpb"><div class="qpf" style="width:${pc}%"></div></div><div class="qnl">CÂU ${S.cur+1}</div>${lowConf?`<div style="margin-bottom:8px"><span style="font-size:10px;background:#fff7ed;color:#9a3412;padding:3px 8px;border-radius:99px;font-weight:700">⚠ Parse confidence thấp (${Math.round(Number(q.parse_confidence||0)*100)}%)</span></div>`:''}<div class="qt">${qText}</div>${chs}<div class="qnv"><button class="bo" onclick="gt3(${S.cur-1})" ${S.cur===0?'disabled':''}>◀ Trước</button><button class="bd2" onclick="csb3()">Nộp bài</button>${S.cur<S.qs.length-1?`<button class="bp" onclick="gt3(${S.cur+1})">Tiếp ▶</button>`:`<button class="bp" style="background:var(--g)" onclick="subq3()">Xong ✓</button>`}</div></div><div class="qs2"><div class="tc2"><div class="ct" style="margin-bottom:9px">THỜI GIAN</div><div class="tr"><svg width="84" height="84" viewBox="0 0 84 84"><circle class="tcb" cx="42" cy="42" r="38"/><circle class="tcc" cx="42" cy="42" r="38" stroke="${w?'#dc2626':'var(--p)'}" stroke-dasharray="${ci}" stroke-dashoffset="${ci-d}" id="tcc"/></svg><div class="tct" id="tct" style="color:${w?'var(--r)':'var(--t)'}">${mm}:${ss}</div></div>${w?'<div style="font-size:11px;color:var(--r);font-weight:700">⚠ Sắp hết giờ!</div>':''}<div style="margin-top:8px;font-size:11px;color:${S.blurCount>0?'var(--r)':'var(--t3)'};font-weight:700">🛡 Anti-cheat: rời tab ${S.blurCount} lần</div></div><div class="card"><div class="ct" style="margin-bottom:9px">CÂU HỎI</div><div class="dg2">${dots}</div></div></div></div></div>`;
 }
-function stt3(){clearInterval(S.ti);const tot=S.nq*90,ci=2*Math.PI*38;S.ti=setInterval(()=>{S.tl--;const mm=String(Math.floor(S.tl/60)).padStart(2,'0'),ss=String(S.tl%60).padStart(2,'0'),w=S.tl<60,d=(S.tl/tot)*ci;const tt=$("tct"),tc=$("tcc");if(tt){tt.textContent=`${mm}:${ss}`;tt.style.color=w?"var(--r)":"var(--t)";}if(tc){tc.style.strokeDashoffset=ci-d;tc.style.stroke=w?"#dc2626":"var(--p)";}if(S.tl<=0){clearInterval(S.ti);subq3();}},1000);}
-function pk3(l){if(S.cm2[S.cur]!==undefined)return;S.ans[S.cur]=l;document.querySelectorAll('.cb2').forEach(e=>{const lb=e.querySelector('.cl').textContent;e.className="cb2"+(lb===l?" sel":"");});const d=document.querySelectorAll('.qd');if(d[S.cur]){d[S.cur].classList.remove("cur");d[S.cur].classList.add("ans");}if(S.an&&S.cur<S.qs.length-1)setTimeout(()=>gt3(S.cur+1),500);}
-function gt3(i){if(i<0||i>=S.qs.length)return;S.cur=i;rp2();stt3();}
+function stt3(){clearInterval(S.ti);const tot=Math.max(60,calcQuizTotalSeconds()),ci=2*Math.PI*38;const tick=()=>{if(!S.deadlineAt)S.deadlineAt=Date.now()+(Math.max(0,S.tl)*1000);const remainMs=Math.max(0,S.deadlineAt-Date.now());S.tl=Math.ceil(remainMs/1000);const mm=String(Math.floor(S.tl/60)).padStart(2,'0'),ss=String(S.tl%60).padStart(2,'0'),w=S.tl<60,d=(Math.max(0,S.tl)/tot)*ci;const tt=$("tct"),tc=$("tcc");if(tt){tt.textContent=`${mm}:${ss}`;tt.style.color=w?"var(--r)":"var(--t)";}if(tc){tc.style.strokeDashoffset=ci-d;tc.style.stroke=w?"#dc2626":"var(--p)";}if(remainMs<=0){clearInterval(S.ti);S.ti=null;subq3();}};tick();S.ti=setInterval(tick,250);}
+function calcAutoNextDelay(){const base=Math.max(250,Number(S.anDelay)||900);if(S.anMode!=='adaptive')return base;const q=S.qs[S.cur]||{};const qlen=String(q.question||'').length;const maxChoice=Math.max(0,...(q.choices||[]).map(c=>String(c.text||'').length));const mix=qlen+Math.round(maxChoice*0.75);const bonus=Math.min(900,Math.round(mix/8));return Math.max(250,Math.min(2800,base+bonus));}
+function pk3(l){if(S.cm2[S.cur]!==undefined)return;S.ans[S.cur]=l;document.querySelectorAll('.cb2').forEach(e=>{const lb=e.querySelector('.cl').textContent;e.className="cb2"+(lb===l?" sel":"");});const d=document.querySelectorAll('.qd');if(d[S.cur]){d[S.cur].classList.remove("cur");d[S.cur].classList.add("ans");}if(S.an&&S.cur<S.qs.length-1){if(S.anTimer)clearTimeout(S.anTimer);S.anTimer=setTimeout(()=>gt3(S.cur+1),calcAutoNextDelay());}}
+function gt3(i){if(i<0||i>=S.qs.length)return;if(S.anTimer){clearTimeout(S.anTimer);S.anTimer=null;}S.cur=i;rp2();}
 function csb3(){const l=S.qs.length-Object.keys(S.ans).length;if(l>0&&!confirm(`Còn ${l} câu chưa trả lời. Nộp bài?`))return;subq3();}
-async function subq3(){clearInterval(S.ti);const tk=Math.round((Date.now()-S.st)/1000);try{const r=await apiFetch(`${API}/quiz/submit`,{method:'POST',headers:authHeaders({"Content-Type":"application/json"}),body:JSON.stringify({session_id:S.sid,answers:S.ans,time_taken:tk,file_id:S.sf||""})});const d=await r.json();d.details.forEach(det=>S.cm2[det.id]=det.correct);S.res=d;S.pg="result";rp2();lst();}catch{tst("Lỗi nộp bài!","err");}}
+async function subq3(){clearInterval(S.ti);const tk=Math.round((Date.now()-S.st)/1000);try{const anti={blur_count:S.blurCount||0,tab_switches:S.blurCount||0,penalty_base_sec:S.blurPenaltySec||15};const r=await apiFetch(`${API}/quiz/submit`,{method:'POST',headers:authHeaders({"Content-Type":"application/json"}),body:JSON.stringify({session_id:S.sid,answers:S.ans,time_taken:tk,file_id:S.sf||"",anti_cheat:anti})});const d=await r.json();d.details.forEach(det=>S.cm2[det.id]=det.correct);S.res=d;tst(`Nộp bài xong: ${d.score}/${d.total} (${d.percent}%)`,`important`);S.pg="result";rp2();lst();}catch{tst("Lỗi nộp bài!","err");}}
 
 // ── RESULT ──
 function rrs(m){
@@ -593,8 +647,41 @@ function rw3(){const w=S.res.details.filter(d=>!d.ok).length;if(!w)return;S.nq=M
 function rht(m){
   if(!S.hist.length){m.innerHTML=`<div class="page"><div class="tb"><div class="pt">Lịch sử</div></div><div class="card" style="text-align:center;padding:44px;color:var(--t3)">📭 Chưa có lịch sử</div></div>`;return;}
   const avg=Math.round(S.hist.reduce((a,h)=>a+h.percent,0)/S.hist.length),best=Math.max(...S.hist.map(h=>h.percent));
-  const rows=S.hist.map((h,i)=>{const c=h.percent>=80?"var(--g)":h.percent>=60?"var(--a)":"var(--r)",bc=h.percent>=80?"#10b981":h.percent>=60?"#f59e0b":"#ef4444";const fn=S.stats.files?.find(f=>f.id===h.file_id);return`<tr style="animation:fu .28s ease ${i*.04}s both"><td><b>${S.hist.length-i}</b></td><td style="font-family:Outfit;font-size:17px;font-weight:800;color:${c}">${h.percent}%</td><td><b>${h.score}</b><span style="color:var(--t3)">/${h.total}</span><div class="pb"><div class="pbf" style="width:${h.percent}%;background:${bc}"></div></div></td><td>${fn?`<span style="font-size:11px;background:var(--p3);color:var(--p);padding:2px 8px;border-radius:99px;font-weight:700">${fn.name}</span>`:'<span style="color:var(--t3)">Tất cả</span>'}</td><td style="color:var(--t3);font-size:12px">${h.date}</td></tr>`;}).join('');
-  m.innerHTML=`<div class="page"><div class="tb"><div><div class="pt">Lịch sử</div><div class="ps">${S.hist.length} lần thi</div></div><button class="bd2" style="padding:7px 14px;font-size:12px" onclick="clh3()">🗑 Xóa</button></div><div class="sr stg"><div class="sc"><div class="sic ip">📊</div><div><div class="sn2" style="color:var(--p)">${S.hist.length}</div><div class="sl2">Lần thi</div></div></div><div class="sc"><div class="sic ig">💯</div><div><div class="sn2" style="color:var(--g)">${avg}%</div><div class="sl2">Trung bình</div></div></div><div class="sc"><div class="sic ia">🏆</div><div><div class="sn2" style="color:var(--a)">${best}%</div><div class="sl2">Cao nhất</div></div></div></div><div class="card"><table class="ht"><thead><tr><th>#</th><th>Điểm</th><th>Kết quả</th><th>Đề thi</th><th>Ngày</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+  const rows=S.hist.map((h,i)=>{const c=h.percent>=80?"var(--g)":h.percent>=60?"var(--a)":"var(--r)",bc=h.percent>=80?"#10b981":h.percent>=60?"#f59e0b":"#ef4444";const fn=S.stats.files?.find(f=>f.id===h.file_id);const ac=(h.anti_cheat||{});const blur=Number(ac.blur_count||0);const rowBg=blur>0?'background:#fff7f7;':'';const acBadge=blur>0?`<span style="font-size:10px;background:#fee2e2;color:#991b1b;padding:2px 7px;border-radius:99px;font-weight:700">🚨 ${blur} lần</span>`:`<span style="font-size:10px;background:#ecfeff;color:#155e75;padding:2px 7px;border-radius:99px;font-weight:700">✓ Sạch</span>`;const canReview=(h.review_details||[]).length>0;const rvBtn=canReview?`<button class='bo' style='padding:4px 9px;font-size:11px' onclick='openHistoryReview(${h.id})'>👁 Xem lại</button>`:`<span style='font-size:11px;color:var(--t3)'>—</span>`;return`<tr style="animation:fu .28s ease ${i*.04}s both;${rowBg}"><td><b>${S.hist.length-i}</b></td><td style="font-family:Outfit;font-size:17px;font-weight:800;color:${c}">${h.percent}%</td><td><b>${h.score}</b><span style="color:var(--t3)">/${h.total}</span><div class="pb"><div class="pbf" style="width:${h.percent}%;background:${bc}"></div></div></td><td>${acBadge}</td><td>${rvBtn}</td><td>${fn?`<span style="font-size:11px;background:var(--p3);color:var(--p);padding:2px 8px;border-radius:99px;font-weight:700">${fn.name}</span>`:'<span style="color:var(--t3)">Tất cả</span>'}</td><td style="color:var(--t3);font-size:12px">${h.date}</td></tr>`;}).join('');
+  m.innerHTML=`<div class="page"><div class="tb"><div><div class="pt">Lịch sử</div><div class="ps">${S.hist.length} lần thi</div></div><button class="bd2" style="padding:7px 14px;font-size:12px" onclick="clh3()">🗑 Xóa</button></div><div class="sr stg"><div class="sc"><div class="sic ip">📊</div><div><div class="sn2" style="color:var(--p)">${S.hist.length}</div><div class="sl2">Lần thi</div></div></div><div class="sc"><div class="sic ig">💯</div><div><div class="sn2" style="color:var(--g)">${avg}%</div><div class="sl2">Trung bình</div></div></div><div class="sc"><div class="sic ia">🏆</div><div><div class="sn2" style="color:var(--a)">${best}%</div><div class="sl2">Cao nhất</div></div></div></div><div class="card"><table class="ht"><thead><tr><th>#</th><th>Điểm</th><th>Kết quả</th><th>Anti-cheat</th><th>Xem lại</th><th>Đề thi</th><th>Ngày</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+}
+
+function openHistoryReview(historyId){
+  const h=(S.hist||[]).find(x=>x.id===historyId);
+  if(!h){tst('Không tìm thấy bản ghi','err');return;}
+  const details=h.review_details||[];
+  if(!details.length){tst('Bản ghi cũ chưa có dữ liệu xem lại','err');return;}
+  const title=`Lần thi #${historyId} · ${h.score}/${h.total} (${h.percent}%)`;
+  QPM={fileId:'history_'+historyId,fileName:title,questions:details.map((d,idx)=>({id:idx+1,question:d.question,choices:d.choices||[],answer:d.correct||'',_user:d.user||'',_ok:!!d.ok})),filtered:[],selIdx:null,dirty:false,onlyLowConf:false,onlyMath:false,onlyUnreviewed:false,reviewMap:{}};
+  QPM.filtered=[...QPM.questions];
+  $('qpm-title').textContent='🧾 Xem lại bài đã làm';
+  $('qpm-sub').textContent=title;
+  $('qpm-count-lbl').textContent=`${QPM.questions.length} câu`;
+  $('qpm-search').value='';
+  const lbtn=$('qpm-low-btn'); if(lbtn) lbtn.classList.remove('on');
+  const mbtn=$('qpm-math-btn'); if(mbtn) mbtn.classList.remove('on');
+  const ubtn=$('qpm-unrev-btn'); if(ubtn) ubtn.classList.remove('on');
+  renderHistoryReviewList();
+  $('qpm-edit').innerHTML='<div class="qpm-empty"><div style="font-size:36px">👈</div><div>Chọn một câu để xem chi tiết</div></div>';
+  om('qpm');
+}
+function renderHistoryReviewList(){
+  const el=$('qpm-list');
+  if(!QPM.filtered.length){el.innerHTML='<div style="text-align:center;padding:20px;color:var(--t3);font-size:12px">Không có dữ liệu</div>';return;}
+  el.innerHTML=QPM.filtered.map((q,idx)=>`<div class="qpi ${QPM.selIdx===idx?'on':''}" onclick="selectHistoryReviewQ(${idx})"><div class="qpi-num">Câu ${idx+1}</div><div class="qpi-txt">${q.question}</div><span class="qpi-ans ${q._ok?'ok':'no'}">${q._ok?'✓ Đúng':'✗ Sai'}</span></div>`).join('');
+}
+function selectHistoryReviewQ(idx){
+  QPM.selIdx=idx;
+  renderHistoryReviewList();
+  const q=QPM.questions[idx];
+  if(!q)return;
+  const choiceHtml=(q.choices||[]).map(c=>{const isUser=(q._user||'')===c.label;const isCorrect=(q.answer||'')===c.label;const bg=isCorrect?'#d1fae5':(isUser?'#fee2e2':'#fff');const br=isCorrect?'#10b981':(isUser?'#ef4444':'#e5e7eb');return `<div style="padding:8px 10px;border:1.5px solid ${br};background:${bg};border-radius:9px;margin-bottom:7px"><b>${c.label}.</b> ${c.text}</div>`;}).join('');
+  $('qpm-edit').innerHTML=`<div style='font-size:13px;font-weight:700;color:var(--p);margin-bottom:10px'>Câu ${idx+1}</div><div style='font-size:14px;line-height:1.6;margin-bottom:12px'>${q.question}</div><div style='margin-bottom:12px'>${choiceHtml}</div><div style='display:flex;gap:8px;flex-wrap:wrap'><span style='font-size:12px;background:#f3f4f6;padding:5px 10px;border-radius:99px'>Bạn chọn: <b>${q._user||'—'}</b></span><span style='font-size:12px;background:#d1fae5;color:#065f46;padding:5px 10px;border-radius:99px'>Đáp án: <b>${q.answer||'—'}</b></span><span style='font-size:12px;background:${q._ok?'#d1fae5':'#fee2e2'};color:${q._ok?'#065f46':'#991b1b'};padding:5px 10px;border-radius:99px'><b>${q._ok?'Đúng':'Sai'}</b></span></div>`;
 }
 function afh(){setTimeout(()=>document.querySelectorAll('.pbf').forEach(e=>{const w=e.style.width;e.style.width='0';requestAnimationFrame(()=>e.style.width=w);}),200);}
 async function clh3(){if(!confirm("Xóa toàn bộ lịch sử?"))return;await apiFetch(`${API}/history/clear`,{method:'DELETE',headers:authHeaders()});S.hist=[];tst("Đã xóa lịch sử");rp2();}
@@ -632,7 +719,9 @@ async function hf3(files){
     $(`pf${uid}`).style.width="40%";
     const fd=new FormData();fd.append("file",f);
     try{
-      const r=await apiFetch(`${API}/upload`,{method:'POST',headers:authHeaders(),body:fd});
+      const forceAI = /\.pdf$/i.test(f.name||'');
+      const hdrs = forceAI ? authHeaders({"X-Force-AI":"true"}) : authHeaders();
+      const r=await apiFetch(`${API}/upload`,{method:'POST',headers:hdrs,body:fd});
       const d=await r.json();
       $(`sd2${uid}`).className="step-dot done";$(`sd2${uid}`).textContent="✓";
       $(`sd3${uid}`).className="step-dot active";$(`st3${uid}`).textContent="Đang xử lý...";$(`st3${uid}`).style.color="var(--t)";
@@ -642,14 +731,15 @@ async function hf3(files){
       $(`pf${uid}`).style.width="100%";
       if(r.ok){
         ta+=d.added;tp+=d.parsed;
-        const isAI=d.parse_method==='vision_ai';
+        const isAI=d.parse_method==='vision_ai'||d.parse_method==='gemini_ai';
         $(`b${uid}`).style.cssText='background:#d1fae5;color:#065f46';$(`b${uid}`).textContent='✓';
         $(`st3${uid}`).textContent=`${d.parsed} câu · ${d.with_answer} đáp án (${d.ans_rate}%)${isAI?' · 🤖 AI':''}`;
         if(isAI)tst(`🤖 AI nhận dạng ${d.with_answer} đáp án từ bảng tô màu!`,"info");
       }else{$(`b${uid}`).style.cssText='background:#fee2e2;color:#991b1b';$(`b${uid}`).textContent='✗';$(`st3${uid}`).textContent=d.detail||"Lỗi";}
     }catch(e){$(`b${uid}`).style.cssText='background:#fee2e2;color:#991b1b';$(`b${uid}`).textContent='✗';$(`st3${uid}`).textContent="Lỗi kết nối server";}
   }
-  ok.classList.add("show");ok.textContent=`✅ Hoàn tất! ${tp} câu · +${ta} câu mới`;
+  ok.classList.add("show");ok.textContent=`✅ Hoàn tất! ${tp} câu · +${ta} câu mới`;tst(`Upload xong: ${tp} câu · +${ta} câu mới`,`important`);
+  setTimeout(()=>{if($('flist3'))$('flist3').innerHTML='';},900);
   await lst();rp2();
 }
 function startF(id){S.sf=id;ubf();nv('quiz-start');}
@@ -693,15 +783,41 @@ function rset(m){
     <div class="sr2"><div><div class="sl3"> AI Vision</div><div class="sd3">${S.stats.ai_available?'✅ Đang hoạt động · Đọc bảng ô tô màu':'⚙️ Cấu hình key trong file main.py'}</div></div><button class="bp" style="padding:7px 13px;font-size:12px" onclick="openAI()">🤖 Trạng thái</button></div>
     <div class="ct" style="margin:18px 0 3px">TRẢI NGHIỆM</div>
     <div class="sr2"><div><div class="sl3">Tự động sang câu tiếp</div><div class="sd3">Chuyển sau khi chọn đáp án</div></div><div class="tgg ${S.an?'on':''}" id="tg-an" onclick="tgs3()"></div></div>
+    <div class="sr2"><div style="flex:1"><div class="sl3">Chế độ tự chuyển</div><div class="sd3">Gợi ý: Adaptive phù hợp đa số người học</div></div><select class="inp" style="max-width:180px;padding:7px 10px" onchange="setAnMode(this.value)"><option value="adaptive" ${S.anMode==='adaptive'?'selected':''}>Thông minh (Adaptive)</option><option value="fixed" ${S.anMode==='fixed'?'selected':''}>Cố định (Fixed)</option></select></div>
+    <div class="sr2"><div style="flex:1"><div class="sl3">Độ trễ tự chuyển</div><div class="sd3" id="an-delay-lbl">${anDelayHint()}</div><div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:7px"><button class="bo" style="padding:5px 9px;font-size:11px" onclick="setAnDelay(500)">Nhanh</button><button class="bo" style="padding:5px 9px;font-size:11px" onclick="setAnDelay(900)">Vừa</button><button class="bo" style="padding:5px 9px;font-size:11px" onclick="setAnDelay(1400)">Chậm</button></div></div><input type="range" min="250" max="2500" step="50" value="${S.anDelay}" oninput="setAnDelay(this.value)" style="width:170px"></div>
     <div class="ct" style="margin:18px 0 3px">DỮ LIỆU</div>
     <div class="sr2"><div><div class="sl3">Xóa lịch sử</div><div class="sd3">${S.hist.length} bản ghi</div></div><button class="bd2" style="padding:7px 13px;font-size:12px" onclick="clh3()">Xóa</button></div>
     <div class="sr2"><div><div class="sl3">Đăng xuất</div></div><button class="bd2" style="padding:7px 13px;font-size:12px" onclick="lo()">Đăng xuất</button></div>
   </div></div>`;
 }
-function tgs3(){S.an=!S.an;localStorage.setItem("cq_an",S.an);$("tg-an")?.classList.toggle("on",S.an);}
+function anDelayLabel(){if(S.anDelay<=550)return 'Nhanh';if(S.anDelay<=1050)return 'Vừa';return 'Chậm';}
+function anDelayHint(){const mode=S.anMode==='adaptive'?'Thông minh: câu dài sẽ chờ thêm':'Cố định: mọi câu chờ như nhau';return `${anDelayLabel()} · ${S.anDelay}ms · ${mode}`;}
+function refreshAnDelayUI(){const lb=$('an-delay-lbl');if(lb)lb.textContent=anDelayHint();}
+function tgs3(){S.an=!S.an;localStorage.setItem("cq_an",S.an);$("tg-an")?.classList.toggle("on",S.an);}function setAnMode(v){S.anMode=(v==='fixed'?'fixed':'adaptive');localStorage.setItem('cq_an_mode',S.anMode);refreshAnDelayUI();}function setAnDelay(v){const n=Math.max(250,Math.min(2500,parseInt(v,10)||900));S.anDelay=n;localStorage.setItem("cq_an_delay",String(n));const rg=document.querySelector('input[type="range"][oninput="setAnDelay(this.value)"]');if(rg)rg.value=String(n);refreshAnDelayUI();}
+
+let _visHookBound=false;
+function bindQuizVisibilityGuard(){
+  if(_visHookBound)return;
+  _visHookBound=true;
+  document.addEventListener('visibilitychange',()=>{
+    if(S.pg!=='quiz' || !S.deadlineAt)return;
+    if(document.hidden){
+      S.lastHiddenAt=Date.now();
+      return;
+    }
+    const now=Date.now();
+    const hiddenForMs=S.lastHiddenAt?Math.max(0,now-S.lastHiddenAt):0;
+    const dynamicPenalty=S.blurPenaltySec + Math.min(45,Math.floor(hiddenForMs/2000));
+    S.blurCount+=1;
+    S.deadlineAt-=dynamicPenalty*1000;
+    S.tl=Math.max(0,Math.ceil((S.deadlineAt-now)/1000));
+    tst(`Rời tab lần ${S.blurCount}: trừ ${dynamicPenalty}s`,`err`);
+    S.lastHiddenAt=0;
+  });
+}
 
 // ── PREVIEW & EDIT QUESTIONS ──
-let QPM = { fileId: '', fileName: '', questions: [], filtered: [], selIdx: null, dirty: false };
+let QPM = { fileId: '', fileName: '', questions: [], filtered: [], selIdx: null, dirty: false, onlyLowConf: false, onlyMath: false, onlyUnreviewed: false, reviewMap: {} };
 function qpmQuestionHasAnswer(q) {
   const a = q && q.answer;
   if (!a || !'ABCD'.includes(a)) return false;
@@ -709,20 +825,22 @@ function qpmQuestionHasAnswer(q) {
 }
 
 async function openPreview(fileId, fileName) {
-  QPM = { fileId, fileName, questions: [], filtered: [], selIdx: null, dirty: false };
+  QPM = { fileId, fileName, questions: [], filtered: [], selIdx: null, dirty: false, onlyLowConf: false, onlyMath: false, onlyUnreviewed: false, reviewMap: {} };
   $('qpm-title').textContent = '📋 ' + fileName;
   $('qpm-sub').textContent = 'Đang tải câu hỏi...';
   $('qpm-list').innerHTML = '<div class="qpm-loading"><span class="spin">⏳</span> Đang tải...</div>';
   $('qpm-edit').innerHTML = '<div class="qpm-empty"><div style="font-size:36px">👈</div><div>Chọn một câu hỏi để chỉnh sửa</div></div>';
   $('qpm-count-lbl').textContent = '';
   $('qpm-search').value = '';
+  const lbtn=$('qpm-low-btn'); if(lbtn) lbtn.classList.remove('on');
+  const mbtn=$('qpm-math-btn'); if(mbtn) mbtn.classList.remove('on');
   om('qpm');
   try {
     const r = await apiFetch(`${API}/files/${encodeURIComponent(fileId)}/questions`, {headers:authHeaders()});
     if (!r.ok) throw new Error('Lỗi tải');
     const d = await r.json();
     QPM.questions = d.questions || [];
-    QPM.filtered = [...QPM.questions];
+    applyQpmFilters();
     renderQList();
     $('qpm-sub').textContent = `${QPM.questions.length} câu hỏi · ${QPM.questions.filter(qpmQuestionHasAnswer).length} có đáp án`;
     $('qpm-count-lbl').textContent = `${QPM.questions.length} câu`;
@@ -731,10 +849,58 @@ async function openPreview(fileId, fileName) {
   }
 }
 
-function filterQList(val) {
-  const v = val.trim().toLowerCase();
-  QPM.filtered = v ? QPM.questions.filter(q => q.question.toLowerCase().includes(v) || (q.choices||[]).some(c=>c.text.toLowerCase().includes(v))) : [...QPM.questions];
+function applyQpmFilters() {
+  const v = ($('qpm-search')?.value || '').trim().toLowerCase();
+  QPM.filtered = (QPM.questions||[]).filter(q => {
+    const txtOk = !v || String(q.question||'').toLowerCase().includes(v) || (q.choices||[]).some(c=>String(c.text||'').toLowerCase().includes(v));
+    const conf = Number(q.parse_confidence||0);
+    const lowOk = !QPM.onlyLowConf || (conf > 0 && conf < 0.7);
+    const mathOk = !QPM.onlyMath || !!(q.parse_flags && q.parse_flags.math_detected);
+    const reviewed = !!q.reviewed;
+    const unrevOk = !QPM.onlyUnreviewed || !reviewed;
+    return txtOk && lowOk && mathOk && unrevOk;
+  });
+  const cb=$('qpm-clear-btn'); if(cb) cb.style.display=v?'inline-flex':'none';
+}
+function filterQList(){
+  applyQpmFilters();
   renderQList();
+}
+function clearQSearch(){
+  const ip=$('qpm-search');
+  if(ip) ip.value='';
+  const cb=$('qpm-clear-btn'); if(cb) cb.style.display='none';
+  applyQpmFilters();
+  renderQList();
+  if(ip) ip.focus();
+}
+function toggleQpmLowConf(){QPM.onlyLowConf=!QPM.onlyLowConf;const b=$('qpm-low-btn');if(b)b.classList.toggle('on',QPM.onlyLowConf);applyQpmFilters();renderQList();}
+function toggleQpmMath(){QPM.onlyMath=!QPM.onlyMath;const b=$('qpm-math-btn');if(b)b.classList.toggle('on',QPM.onlyMath);applyQpmFilters();renderQList();}
+function toggleQpmUnreviewed(){QPM.onlyUnreviewed=!QPM.onlyUnreviewed;const b=$('qpm-unrev-btn');if(b)b.classList.toggle('on',QPM.onlyUnreviewed);applyQpmFilters();renderQList();}
+async function batchReviewFiltered(){
+  if(String(QPM.fileId||'').startsWith('history_')){tst('Chế độ xem lại lịch sử không hỗ trợ duyệt hàng loạt','err');return;}
+  const targets=(QPM.filtered||[]).filter(q=>!q.reviewed);
+  if(!targets.length){tst('Không có câu nào cần duyệt trong danh sách lọc','err');return;}
+  if(!confirm(`Duyệt ${targets.length} câu đang lọc?`)) return;
+  const btn=$('qpm-batch-review-btn');
+  const old=btn?btn.textContent:'';
+  if(btn){btn.disabled=true;btn.textContent='Đang duyệt...';}
+  let ok=0,fail=0;
+  for(const q of targets){
+    try{
+      const r=await apiFetch(`${API}/files/${encodeURIComponent(QPM.fileId)}/questions/${q.id}/review`,{method:'PUT',headers:authHeaders({"Content-Type":"application/json"}),body:JSON.stringify({reviewed:true})});
+      const d=await r.json();
+      if(!r.ok) throw new Error(d.detail||'Lỗi');
+      q.reviewed=!!d.question?.reviewed;
+      q.reviewed_at=d.question?.reviewed_at||null;
+      ok++;
+    }catch{fail++;}
+  }
+  applyQpmFilters();
+  renderQList();
+  renderEditPanel();
+  if(btn){btn.disabled=false;btn.textContent=old||'✅ Duyệt đang lọc';}
+  if(fail===0)tst(`Đã duyệt ${ok} câu`,`important`);else tst(`Duyệt xong: ${ok} thành công, ${fail} lỗi`,'err');
 }
 
 function renderQList() {
@@ -744,12 +910,21 @@ function renderQList() {
     const labs = new Set((q.choices || []).map(c => c.label).filter(Boolean));
     const hasAns = q.answer && labs.has(q.answer) && (q.choices || []).some(c => c.label === q.answer && String(c.text || '').trim());
     const realIdx = QPM.questions.indexOf(q);
+    const conf = Number(q.parse_confidence || 0);
+    const low = conf > 0 && conf < 0.7;
+    const reviewed = !!q.reviewed;
     return `<div class="qpi ${QPM.selIdx===realIdx?'on':''}" onclick="selectQ(${realIdx})">
       <div class="qpi-num">Câu ${realIdx+1}</div>
       <div class="qpi-txt">${q.question}</div>
-      <span class="qpi-ans ${hasAns?'ok':'no'}">${hasAns?'✓ '+q.answer:'Chưa có đáp án'}</span>
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+        <span class="qpi-ans ${hasAns?'ok':'no'}">${hasAns?'✓ '+q.answer:'Chưa có đáp án'}</span>
+        ${low?`<span style='font-size:10px;background:#fff7ed;color:#9a3412;padding:2px 7px;border-radius:99px;font-weight:700'>⚠ ${Math.round(conf*100)}%</span>`:''}
+        ${q.parse_flags?.math_detected?`<span style='font-size:10px;background:#ede9fe;color:#5b21b6;padding:2px 7px;border-radius:99px;font-weight:700'>∑ Math</span>`:''}
+        ${reviewed?`<span style='font-size:10px;background:#dcfce7;color:#166534;padding:2px 7px;border-radius:99px;font-weight:700'>Đã duyệt</span>`:''}
+      </div>
     </div>`;
   }).join('');
+  renderMathInScope(el);
 }
 
 function selectQ(idx) {
@@ -758,6 +933,22 @@ function selectQ(idx) {
   QPM.dirty = false;
   renderQList();
   renderEditPanel();
+}
+async function toggleReviewedCurrentQ(){
+  const q = QPM.questions[QPM.selIdx];
+  if(!q) return;
+  if(String(QPM.fileId||'').startsWith('history_')){tst('Chế độ xem lại lịch sử không lưu được trạng thái duyệt','err');return;}
+  try{
+    const next=!q.reviewed;
+    const r=await apiFetch(`${API}/files/${encodeURIComponent(QPM.fileId)}/questions/${q.id}/review`,{method:'PUT',headers:authHeaders({"Content-Type":"application/json"}),body:JSON.stringify({reviewed:next})});
+    const d=await r.json();
+    if(!r.ok) throw new Error(d.detail||'Lỗi cập nhật review');
+    q.reviewed=!!d.question?.reviewed;
+    q.reviewed_at=d.question?.reviewed_at||null;
+    applyQpmFilters();
+    renderQList();
+    renderEditPanel();
+  }catch(e){tst(e?.message||'Không lưu được trạng thái duyệt','err');}
 }
 
 function renderEditPanel() {
@@ -772,10 +963,14 @@ function renderEditPanel() {
       <input class="qef-inp" id="ch-${lbl}" value="${ch.text.replace(/"/g,'&quot;')}" placeholder="Đáp án ${lbl}..." oninput="QPM.dirty=true">
     </div>`;
   }).join('');
+  const reviewed=!!q.reviewed;
   $('qpm-edit').innerHTML = `
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;gap:8px;flex-wrap:wrap">
       <div style="font-size:13px;font-weight:700;color:var(--p)">Câu ${QPM.selIdx+1}</div>
-      <button class="bd2" style="padding:5px 12px;font-size:11px" onclick="deleteQ(${q.id})">🗑 Xóa câu này</button>
+      <div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap">
+        <button class="bo" style="padding:5px 10px;font-size:11px;${reviewed?'background:#dcfce7;border-color:#16a34a;color:#166534':''}" onclick="toggleReviewedCurrentQ()">${reviewed?'✓ Đã duyệt':'Đánh dấu đã duyệt'}</button>
+        <button class="bd2" style="padding:5px 12px;font-size:11px" onclick="deleteQ(${q.id})">🗑 Xóa câu này</button>
+      </div>
     </div>
     <div class="qef-grp">
       <label class="qef-lbl">NỘI DUNG CÂU HỎI</label>
@@ -809,10 +1004,7 @@ async function saveQ() {
     });
     if (!r.ok) throw new Error((await r.json()).detail || 'Lỗi');
     QPM.questions[QPM.selIdx] = {...q, question, choices, answer};
-    QPM.filtered = QPM.questions.filter(qq => {
-      const v = $('qpm-search').value.trim().toLowerCase();
-      return !v || qq.question.toLowerCase().includes(v) || (qq.choices||[]).some(c=>c.text.toLowerCase().includes(v));
-    });
+    applyQpmFilters();
     QPM.dirty = false;
     tst('Đã lưu câu hỏi ✓');
     $('qpm-sub').textContent = `${QPM.questions.length} câu hỏi · ${QPM.questions.filter(qpmQuestionHasAnswer).length} có đáp án`;
@@ -905,18 +1097,20 @@ async function submitNewQ() {
   } catch(e) { tst(e.message || 'Lỗi thêm câu', 'err'); }
 }
 
+bindQuizVisibilityGuard();
+
 (async ()=>{
   const u=localStorage.getItem("cq_u");
-  if(!u||!S.accessToken){ setTokens("",""); return; }
+  if(!u||!S.accessToken){ setTokens("",""); setAuthVisible(true); return; }
   try{
     S.user=JSON.parse(u);
     const r = await apiFetch(`${API}/auth/me`,{headers:authHeaders()});
     if(!r.ok) throw new Error("unauthorized");
     const d = await r.json();
     const me = d.user || {};
-    S.user = {email: me.email || S.user.email, name: me.display_name || S.user.name || me.email || "CobraQ", uid: me.uid || S.user.uid || ""};
+    S.user = {email: me.email || S.user.email, name: me.display_name || S.user.name || me.email || "CobraQ", uid: me.uid || S.user.uid || "", avatar_url: me.avatar_url || S.user.avatar_url || ""};
     localStorage.setItem("cq_u",JSON.stringify(S.user));
-    $("aw").style.display="none";$("app").classList.add("on");
+    setAuthVisible(false);
     await lst(); await lh(); rp2(); uui();
   }catch{
     localStorage.removeItem("cq_u");

@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS users (
   password_hash VARCHAR(255) DEFAULT NULL,
   role VARCHAR(20) NOT NULL DEFAULT 'user',
   display_name VARCHAR(255) DEFAULT NULL,
+  avatar_url LONGTEXT,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   UNIQUE KEY uq_users_email (email)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -39,9 +40,15 @@ CREATE TABLE IF NOT EXISTS questions (
   file_id VARCHAR(255) NOT NULL,
   q_id INT NOT NULL,
   question_text LONGTEXT NOT NULL,
+  question_rich LONGTEXT,
   choices_json JSON NOT NULL,
+  choices_rich JSON,
   answer VARCHAR(16) DEFAULT '',
   explanation TEXT,
+  reviewed TINYINT(1) NOT NULL DEFAULT 0,
+  reviewed_at DATETIME NULL,
+  parse_confidence DECIMAL(5,4) DEFAULT 0,
+  parse_flags JSON,
   UNIQUE KEY uq_q (user_uid, file_id, q_id),
   KEY idx_user_file (user_uid, file_id),
   CONSTRAINT fk_q_user FOREIGN KEY (user_uid) REFERENCES users(uid) ON DELETE CASCADE

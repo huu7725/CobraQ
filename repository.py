@@ -64,7 +64,13 @@ def register_user(uid: str, email: str, password: str, role: str = "user") -> di
             (uid, email, _hash_password(password), role),
         )
         conn.commit()
-        return {"uid": uid, "email": email, "role": role}
+        return {
+            "uid": uid,
+            "email": email,
+            "role": role,
+            "display_name": None,
+            "avatar_url": None,
+        }
     finally:
         cur.close()
         conn.close()
@@ -80,7 +86,7 @@ def authenticate_user(email: str, password: str) -> Optional[dict]:
     try:
         cur = conn.cursor(dictionary=True)
         cur.execute(
-            "SELECT uid, email, role, password_hash FROM users WHERE email = %s LIMIT 1",
+            "SELECT uid, email, role, display_name, avatar_url, password_hash FROM users WHERE email = %s LIMIT 1",
             (email,),
         )
         row = cur.fetchone()
@@ -88,7 +94,13 @@ def authenticate_user(email: str, password: str) -> Optional[dict]:
             return None
         if not _verify_password(password, row.get("password_hash") or ""):
             return None
-        return {"uid": row["uid"], "email": row.get("email"), "role": row.get("role") or "user"}
+        return {
+            "uid": row["uid"],
+            "email": row.get("email"),
+            "role": row.get("role") or "user",
+            "display_name": row.get("display_name"),
+            "avatar_url": row.get("avatar_url"),
+        }
     finally:
         cur.close()
         conn.close()
@@ -101,7 +113,7 @@ def get_user_by_uid(uid: str) -> Optional[dict]:
     conn = get_connection()
     try:
         cur = conn.cursor(dictionary=True)
-        cur.execute("SELECT uid, email, role, display_name, created_at FROM users WHERE uid = %s LIMIT 1", (uid,))
+        cur.execute("SELECT uid, email, role, display_name, avatar_url, created_at FROM users WHERE uid = %s LIMIT 1", (uid,))
         return cur.fetchone()
     finally:
         cur.close()
@@ -115,7 +127,7 @@ def get_user_by_email(email: str) -> Optional[dict]:
     conn = get_connection()
     try:
         cur = conn.cursor(dictionary=True)
-        cur.execute("SELECT uid, email, role, display_name, created_at FROM users WHERE email = %s LIMIT 1", (email,))
+        cur.execute("SELECT uid, email, role, display_name, avatar_url, created_at FROM users WHERE email = %s LIMIT 1", (email,))
         return cur.fetchone()
     finally:
         cur.close()
@@ -126,7 +138,7 @@ def list_users() -> list:
     conn = get_connection()
     try:
         cur = conn.cursor(dictionary=True)
-        cur.execute("SELECT uid, email, role, display_name, created_at FROM users ORDER BY created_at DESC")
+        cur.execute("SELECT uid, email, role, display_name, avatar_url, created_at FROM users ORDER BY created_at DESC")
         return cur.fetchall() or []
     finally:
         cur.close()
@@ -147,6 +159,41 @@ def set_user_role(uid: str, role: str) -> bool:
     finally:
         cur.close()
         conn.close()
+
+
+def update_user_profile(uid: str, display_name: Optional[str] = None, avatar_url: Optional[str] = None) -> Optional[dict]:
+    uid = (uid or "").strip()
+    if not uid:
+        return None
+    dn = (display_name or "").strip() if display_name is not None else None
+    av = (avatar_url or "").strip() if avatar_url is not None else None
+    if dn is not None and len(dn) > 120:
+        dn = dn[:120]
+    # Avatar có thể là data URL base64 (ảnh <=2MB phía client vẫn dài > 4096 ký tự).
+    # Giữ ngưỡng đủ lớn để không bị cắt cụt, tránh mất ảnh sau khi đăng xuất/đăng nhập lại.
+    if av is not None and len(av) > 4_200_000:
+        av = av[:4_200_000]
+
+    conn = get_connection()
+    try:
+        cur = conn.cursor()
+        sets = []
+        vals = []
+        if dn is not None:
+            sets.append("display_name = %s")
+            vals.append(dn)
+        if av is not None:
+            sets.append("avatar_url = %s")
+            vals.append(av)
+        if not sets:
+            return get_user_by_uid(uid)
+        vals.append(uid)
+        cur.execute(f"UPDATE users SET {', '.join(sets)} WHERE uid = %s", tuple(vals))
+        conn.commit()
+    finally:
+        cur.close()
+        conn.close()
+    return get_user_by_uid(uid)
 
 
 def get_ai_parse_enabled() -> bool:
@@ -209,24 +256,13 @@ def get_questions_json(uid: str, file_id: str) -> list:
     try:
         cur = conn.cursor(dictionary=True)
         cur.execute(
-            "SELECT q_id, question_text, choices_json, answer, explanation FROM questions WHERE user_uid = %s AND file_id = %s ORDER BY q_id",
+            "SELECT q_id, question_text, question_rich, choices_json, choices_rich, answer, explanation, parse_confidence, parse_flags, reviewed, reviewed_at FROM questions WHERE user_uid = %s AND file_id = %s ORDER BY q_id",
             (uid, file_id),
         )
         rows = cur.fetchall()
         out = []
         for r in rows:
-            ch = r["choices_json"]
-            if isinstance(ch, str):
-                ch = json.loads(ch)
-            out.append(
-                {
-                    "id": r["q_id"],
-                    "question": r["question_text"],
-                    "choices": ch,
-                    "answer": r["answer"] or "",
-                    "explanation": r["explanation"] or "",
-                }
-            )
+            out.append(_row_to_question(r))
         return out
     finally:
         cur.close()
@@ -238,7 +274,7 @@ def get_all_questions(uid: str) -> list:
     try:
         cur = conn.cursor(dictionary=True)
         cur.execute(
-            "SELECT q_id, question_text, choices_json, answer, explanation FROM questions WHERE user_uid = %s ORDER BY file_id, q_id",
+            "SELECT q_id, question_text, question_rich, choices_json, choices_rich, answer, explanation, parse_confidence, parse_flags, reviewed, reviewed_at FROM questions WHERE user_uid = %s ORDER BY file_id, q_id",
             (uid,),
         )
         rows = cur.fetchall() or []
@@ -252,12 +288,53 @@ def _row_to_question(r: dict) -> dict:
     ch = r["choices_json"]
     if isinstance(ch, str):
         ch = json.loads(ch)
+
+    ch_rich = r.get("choices_rich") if isinstance(r, dict) else None
+    if isinstance(ch_rich, str):
+        ch_rich = json.loads(ch_rich) if ch_rich else []
+    if ch_rich is None:
+        ch_rich = []
+
+    # map rich text back into choices for frontend convenience
+    rich_map = {}
+    for rc in ch_rich if isinstance(ch_rich, list) else []:
+        if not isinstance(rc, dict):
+            continue
+        lb = (rc.get("label") or "").strip().upper()
+        tx = rc.get("text") or ""
+        if lb in "ABCD":
+            rich_map[lb] = tx
+    merged_choices = []
+    for c in ch if isinstance(ch, list) else []:
+        if not isinstance(c, dict):
+            continue
+        lb = (c.get("label") or "").strip().upper()
+        merged_choices.append({
+            "label": lb,
+            "text": c.get("text") or "",
+            "text_rich": rich_map.get(lb) or c.get("text") or "",
+        })
+
+    p_flags = r.get("parse_flags") if isinstance(r, dict) else None
+    if isinstance(p_flags, str):
+        p_flags = json.loads(p_flags) if p_flags else {}
+    if p_flags is None:
+        p_flags = {}
+
+    q_rich = (r.get("question_rich") if isinstance(r, dict) else None) or r["question_text"]
+
     return {
         "id": r["q_id"],
         "question": r["question_text"],
-        "choices": ch,
+        "question_rich": q_rich,
+        "choices": merged_choices,
+        "choices_rich": ch_rich,
         "answer": r["answer"] or "",
         "explanation": r["explanation"] or "",
+        "parse_confidence": float(r.get("parse_confidence") or 0),
+        "parse_flags": p_flags,
+        "reviewed": bool(r.get("reviewed") or 0),
+        "reviewed_at": r.get("reviewed_at"),
     }
 
 
@@ -281,17 +358,23 @@ def replace_file_questions(
         )
         for q in questions:
             ch = json.dumps(q.get("choices") or [], ensure_ascii=False)
+            ch_rich = json.dumps(q.get("choices_rich") or [], ensure_ascii=False)
+            p_flags = json.dumps(q.get("parse_flags") or {}, ensure_ascii=False)
             cur.execute(
-                """INSERT INTO questions (user_uid, file_id, q_id, question_text, choices_json, answer, explanation)
-                   VALUES (%s, %s, %s, %s, %s, %s, %s)""",
+                """INSERT INTO questions (user_uid, file_id, q_id, question_text, question_rich, choices_json, choices_rich, answer, explanation, parse_confidence, parse_flags)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
                 (
                     uid,
                     file_id,
                     int(q.get("id", 0)),
                     q.get("question") or "",
+                    q.get("question_rich") or q.get("question") or "",
                     ch,
+                    ch_rich,
                     (q.get("answer") or "")[:16],
                     q.get("explanation") or "",
+                    float(q.get("parse_confidence") or 0),
+                    p_flags,
                 ),
             )
         cur.execute(
@@ -427,13 +510,60 @@ def get_file_meta(uid: str, file_id: str) -> Optional[dict]:
         conn.close()
 
 
+def set_question_reviewed(uid: str, file_id: str, q_id: int, reviewed: bool) -> Optional[dict]:
+    conn = get_connection()
+    try:
+        cur = conn.cursor()
+        if reviewed:
+            cur.execute(
+                "UPDATE questions SET reviewed = %s, reviewed_at = CURRENT_TIMESTAMP WHERE user_uid = %s AND file_id = %s AND q_id = %s",
+                (1, uid, file_id, q_id),
+            )
+        else:
+            cur.execute(
+                "UPDATE questions SET reviewed = %s, reviewed_at = NULL WHERE user_uid = %s AND file_id = %s AND q_id = %s",
+                (0, uid, file_id, q_id),
+            )
+        if cur.rowcount == 0:
+            conn.commit()
+            return None
+        conn.commit()
+    finally:
+        cur.close()
+        conn.close()
+
+    conn = get_connection()
+    try:
+        cur = conn.cursor(dictionary=True)
+        cur.execute(
+            "SELECT q_id, question_text, question_rich, choices_json, choices_rich, answer, explanation, parse_confidence, parse_flags, reviewed, reviewed_at FROM questions WHERE user_uid = %s AND file_id = %s AND q_id = %s",
+            (uid, file_id, q_id),
+        )
+        r = cur.fetchone()
+        return _row_to_question(r) if r else None
+    finally:
+        cur.close()
+        conn.close()
+
+
 def update_question_row(uid: str, file_id: str, q_id: int, question: str, choices: list, answer: str) -> Optional[dict]:
     conn = get_connection()
     try:
         cur = conn.cursor()
         cur.execute(
-            """UPDATE questions SET question_text = %s, choices_json = %s, answer = %s WHERE user_uid = %s AND file_id = %s AND q_id = %s""",
-            (question, json.dumps(choices, ensure_ascii=False), answer[:16], uid, file_id, q_id),
+            """UPDATE questions SET question_text = %s, question_rich = %s, choices_json = %s, choices_rich = %s, answer = %s, parse_confidence = %s, parse_flags = %s WHERE user_uid = %s AND file_id = %s AND q_id = %s""",
+            (
+                question,
+                question,
+                json.dumps(choices, ensure_ascii=False),
+                json.dumps(choices, ensure_ascii=False),
+                answer[:16],
+                1.0,
+                json.dumps({"edited": True}, ensure_ascii=False),
+                uid,
+                file_id,
+                q_id,
+            ),
         )
         if cur.rowcount == 0:
             conn.commit()
@@ -447,7 +577,7 @@ def update_question_row(uid: str, file_id: str, q_id: int, question: str, choice
     try:
         cur = conn.cursor(dictionary=True)
         cur.execute(
-            "SELECT q_id, question_text, choices_json, answer, explanation FROM questions WHERE user_uid = %s AND file_id = %s AND q_id = %s",
+            "SELECT q_id, question_text, question_rich, choices_json, choices_rich, answer, explanation, parse_confidence, parse_flags, reviewed, reviewed_at FROM questions WHERE user_uid = %s AND file_id = %s AND q_id = %s",
             (uid, file_id, q_id),
         )
         r = cur.fetchone()
@@ -462,16 +592,20 @@ def insert_question(uid: str, file_id: str, q: dict) -> dict:
     cur = conn.cursor()
     try:
         cur.execute(
-            """INSERT INTO questions (user_uid, file_id, q_id, question_text, choices_json, answer, explanation)
-               VALUES (%s, %s, %s, %s, %s, %s, %s)""",
+            """INSERT INTO questions (user_uid, file_id, q_id, question_text, question_rich, choices_json, choices_rich, answer, explanation, parse_confidence, parse_flags)
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
             (
                 uid,
                 file_id,
                 int(q["id"]),
                 q.get("question") or "",
+                q.get("question_rich") or q.get("question") or "",
                 json.dumps(q.get("choices") or [], ensure_ascii=False),
+                json.dumps(q.get("choices_rich") or q.get("choices") or [], ensure_ascii=False),
                 (q.get("answer") or "")[:16],
                 q.get("explanation") or "",
+                float(q.get("parse_confidence") or 1.0),
+                json.dumps(q.get("parse_flags") or {"manual": True}, ensure_ascii=False),
             ),
         )
         conn.commit()
@@ -490,12 +624,19 @@ def append_history(
     time_taken: int,
     file_id: str,
     wrong_questions: list,
+    anti_cheat: Optional[dict] = None,
+    review_details: Optional[list] = None,
 ) -> None:
     ensure_user(uid)
     date_display = datetime.now().strftime("%d/%m/%Y %H:%M")
     conn = get_connection()
     try:
         cur = conn.cursor()
+        history_payload = {
+            "wrong_questions": wrong_questions or [],
+            "anti_cheat": anti_cheat or {},
+            "review_details": review_details or [],
+        }
         cur.execute(
             """INSERT INTO quiz_history (user_uid, file_id, score, total, percent, time_taken, wrong_questions_json, date_display)
                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)""",
@@ -506,7 +647,7 @@ def append_history(
                 total,
                 percent,
                 time_taken,
-                json.dumps(wrong_questions, ensure_ascii=False),
+                json.dumps(history_payload, ensure_ascii=False),
                 date_display,
             ),
         )
@@ -528,9 +669,21 @@ def get_history_list(uid: str) -> list:
         rows = cur.fetchall()
         out = []
         for r in rows:
-            wq = r["wrong_questions_json"]
-            if isinstance(wq, str):
-                wq = json.loads(wq) if wq else []
+            raw = r["wrong_questions_json"]
+            parsed = raw
+            if isinstance(parsed, str):
+                parsed = json.loads(parsed) if parsed else []
+
+            wrong_questions = []
+            anti_cheat = {}
+            review_details = []
+            if isinstance(parsed, dict):
+                wrong_questions = parsed.get("wrong_questions") or []
+                anti_cheat = parsed.get("anti_cheat") or {}
+                review_details = parsed.get("review_details") or []
+            elif isinstance(parsed, list):
+                wrong_questions = parsed
+
             out.append(
                 {
                     "id": r["id"],
@@ -540,7 +693,9 @@ def get_history_list(uid: str) -> list:
                     "percent": r["percent"],
                     "time_taken": r["time_taken"] or 0,
                     "file_id": r["file_id"] or "all",
-                    "wrong_questions": wq or [],
+                    "wrong_questions": wrong_questions,
+                    "anti_cheat": anti_cheat,
+                    "review_details": review_details,
                 }
             )
         return out

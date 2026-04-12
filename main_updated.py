@@ -18,7 +18,7 @@ from db import init_schema_from_file
 
 # ══ CẤU HÌNH API KEY ══
 # Chỉ lấy từ biến môi trường/.env, không hardcode trong source.
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "AIzaSyBeZA_i0vWbFngTT62GeogddrgbxfpVppI").strip()
 # ════════════════════
 
 app = FastAPI()
@@ -230,6 +230,8 @@ def normalize_merged_choices_in_question(q: dict) -> None:
             for p in _expand_choice_cell(t, label):
                 lb = (p.get("label") or "?").strip().upper()
                 tx = _sanitize_choice_text(p.get("text") or "")
+                tx = re.sub(r"^\s*(?:Phương\s*án|Đáp\s*án)\s*[A-D]\s*[:\-\.]\s*", "", tx, flags=re.IGNORECASE)
+                tx = re.sub(r"\s+", " ", tx).strip(" .;:\t\n\r")
                 if lb in "ABCD" and lb not in seen and tx:
                     seen.add(lb)
                     new_chs.append({"label": lb, "text": tx})
@@ -261,6 +263,54 @@ def _clean_choices_payload(choices: list) -> list:
             seen.add(lb)
             out.append({"label": lb, "text": tx})
     return sorted(out, key=lambda x: "ABCD".index(x["label"]))
+
+
+def _looks_like_math_expr(s: str) -> bool:
+    t = (s or "").strip()
+    if not t:
+        return False
+    math_tokens = [r"\\frac", r"\\sqrt", r"\\int", r"\\sum", r"\\lim", r"\\alpha", r"\\beta", r"\\theta", r"\\pi", r"\^", r"_", r"=", r"≤", r"≥", r"∫", r"Σ", r"√", r"→", r"↔", r"∀", r"∃", r"\bcos\b", r"\bsin\b", r"\btan\b", r"\blog\b", r"\bln\b"]
+    return any(re.search(p, t, flags=re.IGNORECASE) for p in math_tokens)
+
+
+def _to_rich_inline(text: str) -> str:
+    t = (text or "").strip()
+    if not t:
+        return ""
+    if "$" in t or "\\(" in t or "\\[" in t:
+        return t
+    if _looks_like_math_expr(t):
+        return f"\\({t}\\)"
+    return t
+
+
+def enrich_question_rich_fields(q: dict) -> dict:
+    qq = dict(q or {})
+    question = str(qq.get("question") or "").strip()
+    choices = list(qq.get("choices") or [])
+
+    question_rich = _to_rich_inline(question)
+    choices_rich = []
+    math_hits = 1 if _looks_like_math_expr(question) else 0
+    for c in choices:
+        txt = str((c or {}).get("text") or "").strip()
+        if _looks_like_math_expr(txt):
+            math_hits += 1
+        choices_rich.append({"label": (c.get("label") or "").strip().upper(), "text": _to_rich_inline(txt)})
+
+    confidence = 0.82
+    flags = {"math_detected": bool(math_hits), "source": "cpu_only_v1"}
+    if math_hits >= 2:
+        confidence = 0.9
+    if not question or len(choices) < 2:
+        confidence = 0.55
+        flags["needs_review"] = True
+
+    qq["question_rich"] = question_rich or question
+    qq["choices_rich"] = choices_rich
+    qq["parse_confidence"] = round(confidence, 4)
+    qq["parse_flags"] = flags
+    return qq
 
 
 def _validate_question_choices(choices: list, answer: str) -> tuple[list, str]:
@@ -425,18 +475,26 @@ def parse_pdf_inline(page, hl_rects):
     questions, cur = [], None
     for item in lines:
         text, hl = item["text"], item["hl"]
-        m = re.match(r"^(?:C[âa]u\s*)?(\d+)[\.\:\)]\s*(.+)", text, re.IGNORECASE)
-        if m and not re.match(r"^[A-Da-d][\.\)]", m.group(2)):
+        m = re.match(r"^(?:C[âa]u\s*)(\d+)[\.\:\)]\s*(.+)", text, re.IGNORECASE)
+        m_loose = re.match(r"^(\d+)[\.\:\)]\s*(.+)", text, re.IGNORECASE)
+        can_start_loose = False
+        if m_loose:
+            # Chỉ cho phép dạng "1. ..." nếu có đáp án A/B/C/D ngay cùng dòng
+            probe_rest = (m_loose.group(2) or "").strip()
+            can_start_loose = len(split_choice_segments(probe_rest)) >= 3
+
+        mm = m if m else (m_loose if can_start_loose else None)
+        if mm and not re.match(r"^[A-Da-d][\.\)]", mm.group(2)):
             if cur and len(cur["choices"]) >= 2:
                 questions.append(cur)
-            rest = m.group(2).strip()
+            rest = mm.group(2).strip()
             embedded = split_choice_segments(rest)
             if len(embedded) >= 2:
                 fm = CHOICE_INLINE_PAT.search(rest)
                 q_stem = rest[: fm.start()].strip() if fm else rest
-                cur = {"id": int(m.group(1)), "question": q_stem, "choices": list(embedded), "answer": "", "explanation": ""}
+                cur = {"id": int(mm.group(1)), "question": q_stem, "choices": list(embedded), "answer": "", "explanation": ""}
             else:
-                cur = {"id": int(m.group(1)), "question": rest, "choices": [], "answer": "", "explanation": ""}
+                cur = {"id": int(mm.group(1)), "question": rest, "choices": [], "answer": "", "explanation": ""}
         elif cur:
             parts = split_choice_segments(text)
             if parts:
@@ -459,6 +517,91 @@ def parse_pdf_inline(page, hl_rects):
         normalize_merged_choices_in_question(q)
     return questions
 
+def _looks_like_math_question_text(text: str) -> bool:
+    t = (text or "").strip().lower()
+    if not t:
+        return False
+    if re.search(r"\d", t):
+        return True
+    math_kw = [
+        "hàm số", "đạo hàm", "tích phân", "phương trình", "bất phương trình", "log", "sin", "cos", "tan",
+        "đường thẳng", "mặt phẳng", "thể tích", "xác suất", "tọa độ", "cực trị", "nghiệm", "giới hạn",
+        "số phức", "ma trận", "vectơ", "vector", "cấp số", "hình học", "tham số", "biến số",
+    ]
+    if any(k in t for k in math_kw):
+        return True
+    if re.search(r"[xyztmna-b]\b|[=<>≤≥±√∫Σπ]", t):
+        return True
+    return False
+
+
+def _is_likely_valid_mcq(q: dict) -> bool:
+    if not isinstance(q, dict):
+        return False
+    question = str(q.get("question") or "").strip()
+    choices = list(q.get("choices") or [])
+
+    if len(question) < 10 or len(question) > 1200:
+        return False
+    if re.search(r"https?://|www\.|@", question, re.IGNORECASE):
+        return False
+
+    # Cần tối thiểu 3 phương án không rỗng
+    if len(choices) < 3:
+        return False
+
+    # Chặn các đoạn văn bản đời sống/tạp văn hay bị nhận nhầm trong PDF
+    if re.search(r"thời\s+gian\s+tập\s+nhảy|chỉ\s+rất\s+thích\s+nhảy|chất\s+lượng\s+sữa|khảo\s+sát|đoạn\s+văn", question, re.IGNORECASE):
+        return False
+
+    labels = []
+    non_empty = 0
+    for c in choices:
+        lb = str((c or {}).get("label") or "").strip().upper()
+        tx = str((c or {}).get("text") or "").strip()
+        if lb:
+            labels.append(lb)
+        if tx and len(tx) >= 2:
+            non_empty += 1
+
+    if non_empty < 3:
+        return False
+    if any(lb not in ("A", "B", "C", "D") for lb in labels if lb):
+        return False
+
+    return True
+
+
+def _looks_garbled_text(s: str) -> bool:
+    t = (s or "").strip()
+    if not t:
+        return False
+    bad_patterns = [r"[%#@\^~]{2,}", r"[A-Za-z0-9]{1,2}[%#@][A-Za-z0-9]{1,2}", r"K%|Ã|Â|ð|�"]
+    if any(re.search(p, t) for p in bad_patterns):
+        return True
+    # quá nhiều ký tự lạ ngoài tập toán/latin/vn cơ bản
+    weird = re.findall(r"[^\w\s\+\-\*/=\(\)\[\]\{\}\.,:;!?<>&%√πΣ∫≤≥±°'\"\u00C0-\u1EF9]", t, flags=re.UNICODE)
+    return len(weird) >= 3
+
+
+def _garbled_ratio(questions: list) -> float:
+    if not questions:
+        return 1.0
+    bad = 0
+    total = 0
+    for q in questions[:120]:
+        total += 1
+        qq = str(q.get("question") or "")
+        if _looks_garbled_text(qq):
+            bad += 1
+            continue
+        for c in (q.get("choices") or []):
+            if _looks_garbled_text(str((c or {}).get("text") or "")):
+                bad += 1
+                break
+    return (bad / total) if total else 1.0
+
+
 def parse_pdf(content: bytes) -> list:
     import fitz
     doc = fitz.open(stream=content, filetype="pdf")
@@ -471,14 +614,34 @@ def parse_pdf(content: bytes) -> list:
                 if table_qs:
                     all_questions.extend(table_qs)
                     continue
-            except: pass
-        try: all_questions.extend(parse_pdf_inline(page, hl_rects))
-        except: pass
-    for i, q in enumerate(all_questions):
-        q["id"] = i + 1
+            except:
+                pass
+        try:
+            all_questions.extend(parse_pdf_inline(page, hl_rects))
+        except:
+            pass
+
+    # Chuẩn hóa + lọc nhiễu
+    cleaned = []
     for q in all_questions:
         normalize_merged_choices_in_question(q)
-    return all_questions
+        if _is_likely_valid_mcq(q):
+            cleaned.append(q)
+
+    # Khử trùng lặp theo nội dung câu hỏi
+    dedup = []
+    seen = set()
+    for q in cleaned:
+        key = re.sub(r"\s+", " ", str(q.get("question") or "").strip().lower())
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        dedup.append(q)
+
+    for i, q in enumerate(dedup):
+        q["id"] = i + 1
+
+    return dedup
 
 # ══════════════════════════════════════════
 # ════ WORD PARSER — (SIÊU CẤP - XỬ LÝ BẢNG GỘP DÒNG)
@@ -521,20 +684,33 @@ def _parse_lines(lines):
 
 
 def _extract_answer_map_from_lines(lines: list[str]) -> dict:
-    """Trích bảng đáp án từ text thường: hỗ trợ dạng '1 A 2 B' hoặc cột số/cột chữ."""
+    """Trích bảng đáp án từ text thường: fuzzy cho nhiều format khác nhau."""
     ans_map = {}
+
+    def _normalize_line(x: str) -> str:
+        s = (x or "").replace("\u00a0", " ").replace("\u202f", " ")
+        s = re.sub(r"[\u200b\u200c\u200d\ufeff]", "", s)
+        s = re.sub(r"[\|,;]+", " ", s)
+        s = re.sub(r"\s+", " ", s).strip()
+        return s
+
     for ln in lines:
-        s = (ln or "").strip()
+        s = _normalize_line((ln or "").upper())
         if not s:
             continue
-        # dạng: 1 A 2 B 3 C ...
-        for n, a in re.findall(r"(\d{1,4})\s*[:\-\.]?\s*([ABCD])\b", s.upper()):
+
+        # VD: 1A 2B 3C | 1-A | 1:A | 1) A | Câu 1 đáp án B
+        for n, a in re.findall(r"\b(?:CÂU\s*)?(\d{1,4})\s*(?:[\)\].:\-=>]|\s)*(?:ĐÁP\s*ÁN\s*)?([ABCD])\b", s):
+            ans_map[int(n)] = a
+
+        # VD: Câu 12: đáp án là C
+        for n, a in re.findall(r"\bCÂU\s*(\d{1,4})\b[^A-D\n]{0,25}\b([ABCD])\b", s):
             ans_map[int(n)] = a
 
     # dạng 2 dòng: dòng số + dòng chữ
     for i in range(len(lines) - 1):
-        n_line = (lines[i] or "").strip()
-        a_line = (lines[i + 1] or "").strip().upper()
+        n_line = _normalize_line((lines[i] or ""))
+        a_line = _normalize_line((lines[i + 1] or "").upper())
         nums = re.findall(r"\b\d{1,4}\b", n_line)
         letters = re.findall(r"\b[ABCD]\b", a_line)
         if nums and letters and len(nums) == len(letters):
@@ -896,7 +1072,14 @@ def smart_parse(content: bytes, filename: str, force_ai: bool = False) -> dict:
     has_ans = sum(1 for q in questions if q.get("answer") in list("ABCD"))
     ans_rate = round(has_ans / total * 100) if total > 0 else 0
 
-    need_ai = force_ai or (ai_enabled and ((total > 0 and ans_rate < 30) or total == 0))
+    garbled_ratio = _garbled_ratio(questions)
+    garbled = garbled_ratio >= 0.2
+
+    # Nếu PDF và AI khả dụng thì luôn ưu tiên AI parse (không fallback CPU)
+    if filetype == "pdf" and ai_enabled:
+        force_ai = True
+
+    need_ai = force_ai or (ai_enabled and ((total > 0 and ans_rate < 30) or total == 0 or garbled))
     if need_ai and ai_ok:
         method = "gemini_ai"
         try:
@@ -912,13 +1095,19 @@ def smart_parse(content: bytes, filename: str, force_ai: bool = False) -> dict:
         except Exception as e:
             print(f"Gemini AI error: {e}")
 
+    warning = ""
+    if garbled and method != "gemini_ai":
+        warning = "PDF có dấu hiệu lỗi font/công thức; nên bật AI parse để tăng độ chính xác."
+
     return {
         "questions": questions,
         "total": total,
         "ans_rate": ans_rate,
         "method": method,
         "ai_available": ai_ok,
-        "error": error_msg
+        "error": error_msg,
+        "warning": warning,
+        "garbled_ratio": round(garbled_ratio, 4),
     }
 
 
@@ -939,6 +1128,11 @@ class LoginBody(BaseModel):
 
 class RefreshBody(BaseModel):
     refresh_token: str
+
+
+class ProfileBody(BaseModel):
+    display_name: str = ""
+    avatar_url: str = ""
 
 
 def _auth_payload(user: dict) -> dict:
@@ -1032,6 +1226,17 @@ def logout(body: RefreshBody, authorization: str = Header(default="")):
 def me(authorization: str = Header(default="")):
     user = get_auth_user(authorization)
     return {"user": user}
+
+
+@app.put("/auth/profile")
+def update_profile(body: ProfileBody, authorization: str = Header(default="")):
+    user = get_auth_user(authorization)
+    display_name = (body.display_name or "").strip()
+    avatar_url = (body.avatar_url or "").strip()
+    updated = repo.update_user_profile(user["uid"], display_name=display_name, avatar_url=avatar_url)
+    if not updated:
+        raise HTTPException(404, "Không tìm thấy người dùng")
+    return {"message": "Đã lưu hồ sơ", "user": updated}
 
 
 @app.get("/admin/users")
@@ -1130,6 +1335,31 @@ async def upload_file(file: UploadFile = File(...), authorization: str = Header(
         err = result.get("error", "")
         raise HTTPException(400, f"Không tìm thấy câu hỏi.{' Chi tiết: '+err if err else ' Thử bật AI Vision.'}")
 
+    # HARD STOP: nếu có AI khả dụng thì PDF bắt buộc đi qua AI parse
+    if fname.lower().endswith('.pdf') and result.get('ai_available') and result.get('method') != 'gemini_ai':
+        raise HTTPException(400, "PDF bắt buộc parse bằng AI khi AI khả dụng. Vui lòng bật Force AI và upload lại.")
+
+    # Quality gate: nới điều kiện để không chặn oan khi đã parse bằng AI
+    if fname.lower().endswith('.pdf'):
+        g_ratio = float(result.get('garbled_ratio') or 0)
+        ans_rate = float(result.get('ans_rate') or 0)
+        method = result.get('method') or 'unknown'
+
+        # Parse thường: vẫn chặn tương đối chặt
+        if method != 'gemini_ai' and (ans_rate < 35 or g_ratio >= 0.12):
+            raise HTTPException(
+                400,
+                f"PDF parse thường chất lượng thấp (đáp án={ans_rate:.0f}%, garbled={g_ratio:.2f}). Hãy bật AI Vision rồi upload lại."
+            )
+
+        # Parse AI: chỉ chặn khi cực xấu
+        if method == 'gemini_ai' and (ans_rate < 20 or g_ratio >= 0.30):
+            raise HTTPException(
+                400,
+                f"PDF parse AI vẫn quá thấp (đáp án={ans_rate:.0f}%, garbled={g_ratio:.2f}). Hard-stop để tránh lưu đề lỗi nặng."
+            )
+
+
     base_name = re.sub(r'\.(docx|doc|pdf)$', '', fname, flags=re.IGNORECASE)
     file_id = re.sub(r'[^\w\-]', '_', base_name)[:50]
 
@@ -1138,6 +1368,7 @@ async def upload_file(file: UploadFile = File(...), authorization: str = Header(
     normalized_questions = []
     for i, q in enumerate(questions, start=1):
         q["id"] = i
+        q = enrich_question_rich_fields(q)
         normalized_questions.append(q)
 
     uploaded_at = datetime.now().strftime("%d/%m/%Y %H:%M")
@@ -1204,6 +1435,7 @@ class SubmitBody(BaseModel):
     answers: dict
     time_taken: int = 0
     file_id: str = ""
+    anti_cheat: dict = {}
 
 @app.post("/quiz/submit")
 def submit_quiz(body: SubmitBody, authorization: str = Header(default="")):
@@ -1220,8 +1452,34 @@ def submit_quiz(body: SubmitBody, authorization: str = Header(default="")):
     score = sum(1 for d in details if d["ok"])
     pct = round(score / len(quiz) * 100)
     wrong_q = [d["question"][:60] for d in details if not d["ok"]][:5]
+    ac_in = body.anti_cheat or {}
+    anti_cheat = {
+        "blur_count": int(ac_in.get("blur_count") or ac_in.get("tab_switches") or 0),
+        "penalty_base_sec": int(ac_in.get("penalty_base_sec") or 15),
+    }
+    review_details = []
+    for d in details:
+        review_details.append(
+            {
+                "id": d["id"],
+                "question": d["question"],
+                "user": d["user"],
+                "correct": d["correct"],
+                "ok": d["ok"],
+                "choices": d.get("choices") or [],
+            }
+        )
+
     repo.append_history(
-        uid, score, len(quiz), pct, body.time_taken, body.file_id or "all", wrong_q
+        uid,
+        score,
+        len(quiz),
+        pct,
+        body.time_taken,
+        body.file_id or "all",
+        wrong_q,
+        anti_cheat=anti_cheat,
+        review_details=review_details,
     )
     repo.delete_quiz_session(body.session_id)
     return {"score": score, "total": len(quiz), "percent": pct, "details": details}
@@ -1251,6 +1509,10 @@ class QuestionUpdateBody(BaseModel):
     choices: list
     answer: str = ""
 
+
+class QuestionReviewBody(BaseModel):
+    reviewed: bool = True
+
 @app.put("/files/{file_id}/questions/{q_id}")
 def update_question(file_id: str, q_id: int, body: QuestionUpdateBody, authorization: str = Header(default="")):
     user = get_auth_user(authorization)
@@ -1262,6 +1524,18 @@ def update_question(file_id: str, q_id: int, body: QuestionUpdateBody, authoriza
     if not updated:
         raise HTTPException(404, "Không tìm thấy câu hỏi")
     return {"message": "Đã cập nhật", "question": updated}
+
+@app.put("/files/{file_id}/questions/{q_id}/review")
+def set_question_review(file_id: str, q_id: int, body: QuestionReviewBody, authorization: str = Header(default="")):
+    user = get_auth_user(authorization)
+    uid = user["uid"]
+    if not repo.file_exists(uid, file_id):
+        raise HTTPException(404, "Không tìm thấy file")
+    updated = repo.set_question_reviewed(uid, file_id, q_id, bool(body.reviewed))
+    if not updated:
+        raise HTTPException(404, "Không tìm thấy câu hỏi")
+    return {"message": "Đã cập nhật review", "question": updated}
+
 
 @app.delete("/files/{file_id}/questions/{q_id}")
 def delete_question(file_id: str, q_id: int, authorization: str = Header(default="")):

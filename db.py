@@ -90,6 +90,16 @@ class SQLiteCursorWrapper:
         if q.upper().startswith("SHOW COLUMNS FROM USERS LIKE"):
             q = "SELECT name FROM pragma_table_info('users') WHERE name = 'password_hash'"
             p = []
+        if q.upper().startswith("SHOW COLUMNS FROM QUESTIONS LIKE"):
+            col_name = ""
+            try:
+                col_name = q.split("LIKE", 1)[1].strip().strip("'").strip('"')
+            except Exception:
+                col_name = ""
+            if not col_name:
+                col_name = "question_rich"
+            q = f"SELECT name FROM pragma_table_info('questions') WHERE name = '{col_name}'"
+            p = []
 
         # ALTER MODIFY not supported in sqlite -> no-op statement
         if "ALTER TABLE users MODIFY COLUMN password_hash" in q:
@@ -200,7 +210,32 @@ def _run_post_schema_migrations(conn) -> None:
             row = cur.fetchone()
             if row:
                 cur.execute("ALTER TABLE users MODIFY COLUMN password_hash VARCHAR(255) DEFAULT NULL")
-                conn.commit()
+            cur.execute("SHOW COLUMNS FROM users LIKE 'avatar_url'")
+            avatar_col = cur.fetchone()
+            if not avatar_col:
+                cur.execute("ALTER TABLE users ADD COLUMN avatar_url LONGTEXT")
+
+            # questions rich/math fields migrations
+            cur.execute("SHOW COLUMNS FROM questions LIKE 'question_rich'")
+            if not cur.fetchone():
+                cur.execute("ALTER TABLE questions ADD COLUMN question_rich LONGTEXT NULL")
+            cur.execute("SHOW COLUMNS FROM questions LIKE 'choices_rich'")
+            if not cur.fetchone():
+                cur.execute("ALTER TABLE questions ADD COLUMN choices_rich JSON NULL")
+            cur.execute("SHOW COLUMNS FROM questions LIKE 'parse_confidence'")
+            if not cur.fetchone():
+                cur.execute("ALTER TABLE questions ADD COLUMN parse_confidence DECIMAL(5,4) DEFAULT 0")
+            cur.execute("SHOW COLUMNS FROM questions LIKE 'parse_flags'")
+            if not cur.fetchone():
+                cur.execute("ALTER TABLE questions ADD COLUMN parse_flags JSON NULL")
+            cur.execute("SHOW COLUMNS FROM questions LIKE 'reviewed'")
+            if not cur.fetchone():
+                cur.execute("ALTER TABLE questions ADD COLUMN reviewed TINYINT(1) NOT NULL DEFAULT 0")
+            cur.execute("SHOW COLUMNS FROM questions LIKE 'reviewed_at'")
+            if not cur.fetchone():
+                cur.execute("ALTER TABLE questions ADD COLUMN reviewed_at DATETIME NULL")
+
+            conn.commit()
             return
 
         # sqlite lightweight users migration
@@ -211,12 +246,30 @@ def _run_post_schema_migrations(conn) -> None:
             "password_hash": "TEXT",
             "role": "TEXT NOT NULL DEFAULT 'user'",
             "display_name": "TEXT",
+            "avatar_url": "TEXT",
             "created_at": "DATETIME DEFAULT CURRENT_TIMESTAMP",
         }
         for c, t in wanted.items():
             if c not in cols:
                 cur.execute(f"ALTER TABLE users ADD COLUMN {c} {t}")
         cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS uq_users_email ON users(email)")
+
+        # sqlite questions migration (rich/math fields)
+        cur.execute("PRAGMA table_info(questions)")
+        q_cols = {r[1] if not isinstance(r, dict) else r.get('name') for r in cur.fetchall()}
+        q_wanted = {
+            "question_rich": "TEXT",
+            "choices_rich": "TEXT",
+            "parse_confidence": "REAL DEFAULT 0",
+            "parse_flags": "TEXT",
+        }
+        for c, t in q_wanted.items():
+            if c not in q_cols:
+                cur.execute(f"ALTER TABLE questions ADD COLUMN {c} {t}")
+        if "reviewed" not in q_cols:
+            cur.execute("ALTER TABLE questions ADD COLUMN reviewed INTEGER NOT NULL DEFAULT 0")
+        if "reviewed_at" not in q_cols:
+            cur.execute("ALTER TABLE questions ADD COLUMN reviewed_at DATETIME")
         conn.commit()
     finally:
         cur.close()
@@ -235,6 +288,7 @@ def init_schema_from_file() -> None:
                   password_hash TEXT,
                   role TEXT NOT NULL DEFAULT 'user',
                   display_name TEXT,
+                  avatar_url TEXT,
                   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
                 )
                 """,
@@ -268,9 +322,15 @@ def init_schema_from_file() -> None:
                   file_id TEXT NOT NULL,
                   q_id INTEGER NOT NULL,
                   question_text TEXT NOT NULL,
+                  question_rich TEXT,
                   choices_json TEXT NOT NULL,
+                  choices_rich TEXT,
                   answer TEXT DEFAULT '',
                   explanation TEXT,
+                  parse_confidence REAL DEFAULT 0,
+                  parse_flags TEXT,
+                  reviewed INTEGER NOT NULL DEFAULT 0,
+                  reviewed_at DATETIME,
                   UNIQUE(user_uid, file_id, q_id),
                   FOREIGN KEY(user_uid) REFERENCES users(uid) ON DELETE CASCADE
                 )
