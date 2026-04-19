@@ -211,14 +211,32 @@ def get_ai_parse_enabled() -> bool:
 
 
 def set_ai_parse_enabled(enabled: bool) -> None:
+    set_config_value("ai_parse_enabled", 1 if enabled else 0)
+
+
+def set_config_value(key: str, value) -> None:
+    """Generic config setter using INSERT ON DUPLICATE KEY UPDATE."""
     conn = get_connection()
     try:
         cur = conn.cursor()
         cur.execute(
-            "INSERT INTO app_config (id, ai_parse_enabled) VALUES (1, %s) ON DUPLICATE KEY UPDATE ai_parse_enabled = %s",
-            (1 if enabled else 0, 1 if enabled else 0),
+            f"INSERT INTO app_config (id, {key}) VALUES (1, %s) ON DUPLICATE KEY UPDATE {key} = %s",
+            (value, value),
         )
         conn.commit()
+    finally:
+        cur.close()
+        conn.close()
+
+
+def get_config_value(key: str, default=None):
+    """Generic config getter."""
+    conn = get_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(f"SELECT {key} FROM app_config WHERE id = 1")
+        row = cur.fetchone()
+        return row[0] if row else default
     finally:
         cur.close()
         conn.close()
@@ -548,6 +566,7 @@ def set_question_reviewed(uid: str, file_id: str, q_id: int, reviewed: bool) -> 
 
 def update_question_row(uid: str, file_id: str, q_id: int, question: str, choices: list, answer: str) -> Optional[dict]:
     conn = get_connection()
+    cur = None
     try:
         cur = conn.cursor()
         cur.execute(
@@ -565,26 +584,28 @@ def update_question_row(uid: str, file_id: str, q_id: int, question: str, choice
                 q_id,
             ),
         )
-        if cur.rowcount == 0:
-            conn.commit()
-            return None
         conn.commit()
+        if cur.rowcount == 0:
+            return None
+        _reindex_file_counts(uid, file_id)
     finally:
-        cur.close()
+        if cur:
+            cur.close()
         conn.close()
-    _reindex_file_counts(uid, file_id)
-    conn = get_connection()
+
+    # Fetch updated row
+    conn2 = get_connection()
     try:
-        cur = conn.cursor(dictionary=True)
-        cur.execute(
+        cur2 = conn2.cursor(dictionary=True)
+        cur2.execute(
             "SELECT q_id, question_text, question_rich, choices_json, choices_rich, answer, explanation, parse_confidence, parse_flags, reviewed, reviewed_at FROM questions WHERE user_uid = %s AND file_id = %s AND q_id = %s",
             (uid, file_id, q_id),
         )
-        r = cur.fetchone()
+        r = cur2.fetchone()
         return _row_to_question(r) if r else None
     finally:
-        cur.close()
-        conn.close()
+        cur2.close()
+        conn2.close()
 
 
 def insert_question(uid: str, file_id: str, q: dict) -> dict:

@@ -1,24 +1,79 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException, Header
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-import json, random, re, os, base64, io, traceback, uuid
+import json, random, re, os, base64, io, traceback, uuid, logging
 from datetime import datetime, timedelta, timezone
 import jwt
 import importlib
 
-# Import mềm để tránh lỗi IDE "could not be resolved" khi thiếu package trong môi trường hiện tại.
-# Ưu tiên SDK cũ đang dùng trong code (google.generativeai).
+logger = logging.getLogger(__name__)
+
+# Import mềm để tránh lỗi khi thiếu package.
+# Ưu tiên SDK mới (google.genai), fallback sang SDK cũ (google.generativeai).
+genai = None
+_GENAI_NEW = False
 try:
-    genai = importlib.import_module("google.generativeai")
+    from google import genai as _genai_new
+    genai = _genai_new
+    _GENAI_NEW = True
 except Exception:
-    genai = None
+    try:
+        genai = importlib.import_module("google.generativeai")
+    except Exception:
+        genai = None
 
 import repository as repo
-from db import init_schema_from_file
+from db import init_schema_from_file, get_connection
+
+try:
+    from PIL import Image
+except Exception:
+    Image = None
+
+# === AI Pipeline Services ===
+# Import với try-except để tránh lỗi nếu chưa cài đặt
+try:
+    from services.embedding_service import EmbeddingService
+    from services.vector_store import VectorStore
+    from services.rag_service import RAGService
+    from services.mrc_service import MRCService
+    from services.pipeline_service import AIPipeline
+
+    _AI_MODULES_IMPORTED = True
+except ImportError as e:
+    print(f"[WARN] AI services chưa sẵn sàng: {e}")
+    _AI_MODULES_IMPORTED = False
+
+_P2T_MODEL = None
+
+def _get_pix2tex_model():
+    global _P2T_MODEL
+    if _P2T_MODEL is not None:
+        return _P2T_MODEL
+    try:
+        p2t_mod = importlib.import_module("pix2tex.cli")
+        LatexOCR = getattr(p2t_mod, "LatexOCR", None)
+        _P2T_MODEL = LatexOCR() if LatexOCR else False
+    except Exception:
+        _P2T_MODEL = False
+    return _P2T_MODEL
+
+def _formula_ocr_from_pixmap(pm) -> str:
+    if not pm or Image is None:
+        return ""
+    model = _get_pix2tex_model()
+    if not model:
+        return ""
+    try:
+        img = Image.frombytes("RGB", [pm.width, pm.height], pm.samples)
+        out = model(img)
+        return (out or "").strip()
+    except Exception:
+        return ""
 
 # ══ CẤU HÌNH API KEY ══
 # Chỉ lấy từ biến môi trường/.env, không hardcode trong source.
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "AIzaSyBeZA_i0vWbFngTT62GeogddrgbxfpVppI").strip()
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "AIzaSyDFfjPpRydFfmqMrzi_XP2RNFYPAoxJ110").strip()
 # ════════════════════
 
 app = FastAPI()
@@ -32,6 +87,76 @@ JWT_ALGORITHM = "HS256"
 JWT_EXPIRE_HOURS = int(os.getenv("JWT_EXPIRE_HOURS", "24"))
 JWT_REFRESH_SECRET = os.getenv("JWT_REFRESH_SECRET", JWT_SECRET)
 JWT_REFRESH_EXPIRE_DAYS = int(os.getenv("JWT_REFRESH_EXPIRE_DAYS", "14"))
+
+# === AI PIPELINE GLOBAL INITIALIZATION ===
+_embedding_service = None
+_vector_store = None
+_rag_service = None
+_mrc_service = None
+_ai_pipeline = None
+
+def _init_ai_services():
+    """Khởi tạo AI services (lazy load khi cần)."""
+    global _embedding_service, _vector_store, _rag_service, _mrc_service, _ai_pipeline
+
+    # Already initialized successfully
+    if _ai_pipeline is not None:
+        return
+
+    try:
+        from services.embedding_service import EmbeddingService
+        from services.vector_store import VectorStore
+        from services.rag_service import RAGService
+        from services.mrc_service import MRCService
+        from services.pipeline_service import AIPipeline
+
+        print("[CobraQ] AI Pipeline: Đang khởi tạo (lần đầu, cần tải model...)...")
+
+        # Embedding Service - SentenceTransformer có thể mất 10-30s lần đầu
+        _embedding_service = EmbeddingService(
+            model_name=os.getenv("EMBEDDING_MODEL", "paraphrase-multilingual-MiniLM-L12-v2")
+        )
+
+        # Vector Store
+        _vector_store = VectorStore(
+            persist_directory=os.getenv("VECTOR_DB_PATH", "./chroma_db")
+        )
+
+        # RAG Service
+        _rag_service = RAGService(
+            vector_store=_vector_store,
+            embedding_service=_embedding_service,
+            similarity_threshold=float(os.getenv("RAG_SIMILARITY_THRESHOLD", "0.85"))
+        )
+
+        # MRC Service (dùng Gemini)
+        gemini_key = GEMINI_API_KEY
+        if gemini_key and gemini_key not in ["ĐIỀN_API_KEY_CỦA_BẠN_VÀO_ĐÂY", "YOUR_KEY_HERE"]:
+            _mrc_service = MRCService(api_key=gemini_key)
+        else:
+            print("[WARN] Không có GEMINI_API_KEY hợp lệ, AI pipeline sẽ không hoạt động")
+            return
+
+        # Full Pipeline
+        _ai_pipeline = AIPipeline(
+            embedding_service=_embedding_service,
+            vector_store=_vector_store,
+            rag_service=_rag_service,
+            mrc_service=_mrc_service,
+            cache_llm_results=True,
+            default_threshold=0.90
+        )
+
+        print("[CobraQ] AI Pipeline đã sẵn sàng (RAG + MRC)")
+    except Exception as e:
+        import traceback
+        print(f"[ERROR] Không thể khởi tạo AI services: {e}")
+        traceback.print_exc()
+
+
+def _is_ai_pipeline_ready():
+    """Check if AI pipeline is initialized and ready."""
+    return _ai_pipeline is not None
 
 
 def _build_token(user: dict, token_type: str, expires_delta: timedelta, secret: str) -> str:
@@ -108,6 +233,10 @@ def _startup_init_db():
     print(f"[CobraQ] DB engine: {eng}")
     if has_valid_key():
         print("[CobraQ] Gemini AI: ON (đã có GEMINI_API_KEY)")
+        # Pre-warm AI pipeline in background on startup (loads SentenceTransformer)
+        import threading
+        t = threading.Thread(target=_init_ai_services, daemon=True)
+        t.start()
     else:
         print("[CobraQ] Gemini AI: OFF (chưa có GEMINI_API_KEY hợp lệ)")
 
@@ -131,9 +260,10 @@ def _startup_init_db():
 
 
 def load_config():
-    cfg = {"gemini_key": GEMINI_API_KEY, "ai_parse_enabled": True}
+    cfg = {"gemini_key": GEMINI_API_KEY, "ai_parse_enabled": True, "ai_fill_enabled": False}
     try:
         cfg["ai_parse_enabled"] = repo.get_ai_parse_enabled()
+        cfg["ai_fill_enabled"] = bool(repo.get_config_value("ai_fill_enabled", 0))
     except Exception:
         pass
     return cfg
@@ -289,14 +419,20 @@ def enrich_question_rich_fields(q: dict) -> dict:
     question = str(qq.get("question") or "").strip()
     choices = list(qq.get("choices") or [])
 
-    question_rich = _to_rich_inline(question)
+    # Ưu tiên rich text đã OCR được từ parser (pix2tex) nếu có
+    question_rich_raw = str(qq.get("question_rich") or "").strip()
+    question_rich = question_rich_raw or _to_rich_inline(question)
+
+    # choices_rich ưu tiên text_rich từng choice, fallback sang text thường
     choices_rich = []
-    math_hits = 1 if _looks_like_math_expr(question) else 0
+    math_hits = 1 if (_looks_like_math_expr(question) or _looks_like_math_expr(question_rich)) else 0
     for c in choices:
         txt = str((c or {}).get("text") or "").strip()
-        if _looks_like_math_expr(txt):
+        txt_rich_raw = str((c or {}).get("text_rich") or "").strip()
+        txt_rich = txt_rich_raw or _to_rich_inline(txt)
+        if _looks_like_math_expr(txt) or _looks_like_math_expr(txt_rich):
             math_hits += 1
-        choices_rich.append({"label": (c.get("label") or "").strip().upper(), "text": _to_rich_inline(txt)})
+        choices_rich.append({"label": (c.get("label") or "").strip().upper(), "text": txt_rich})
 
     confidence = 0.82
     flags = {"math_detected": bool(math_hits), "source": "cpu_only_v1"}
@@ -461,20 +597,42 @@ def parse_pdf_inline(page, hl_rects):
     lines = []
     try:
         for block in page.get_text("dict")["blocks"]:
-            if block.get("type") != 0: continue
+            if block.get("type") != 0:
+                continue
             for line in block["lines"]:
                 line_text, hl_bg, hl_red = "", False, False
+                x0, y0, x1, y1 = 10**9, 10**9, -1, -1
                 for sp in line["spans"]:
                     line_text += sp["text"]
-                    if hl_rects and span_in_rect(sp["bbox"], hl_rects): hl_bg = True
-                    if is_red_text(sp.get("color", 0)): hl_red = True
+                    bx = sp.get("bbox") or [0, 0, 0, 0]
+                    x0, y0 = min(x0, bx[0]), min(y0, bx[1])
+                    x1, y1 = max(x1, bx[2]), max(y1, bx[3])
+                    if hl_rects and span_in_rect(sp["bbox"], hl_rects):
+                        hl_bg = True
+                    if is_red_text(sp.get("color", 0)):
+                        hl_red = True
                 t = line_text.strip()
-                if t: lines.append({"text": t, "hl": hl_bg or hl_red})
-    except: return []
+                if not t:
+                    continue
+                rich_t = t
+                try:
+                    if _looks_like_math_expr(t) and Image is not None:
+                        import fitz
+                        clip = fitz.Rect(max(0, x0 - 2), max(0, y0 - 2), min(page.rect.width, x1 + 2), min(page.rect.height, y1 + 2))
+                        pm = page.get_pixmap(matrix=fitz.Matrix(3, 3), clip=clip, alpha=False)
+                        latex = _formula_ocr_from_pixmap(pm)
+                        if latex:
+                            rich_t = f"\\({latex}\\)"
+                except Exception:
+                    pass
+                lines.append({"text": t, "rich": rich_t, "hl": hl_bg or hl_red})
+    except:
+        return []
 
     questions, cur = [], None
     for item in lines:
         text, hl = item["text"], item["hl"]
+        rich_text = item.get("rich") or text
         m = re.match(r"^(?:C[âa]u\s*)(\d+)[\.\:\)]\s*(.+)", text, re.IGNORECASE)
         m_loose = re.match(r"^(\d+)[\.\:\)]\s*(.+)", text, re.IGNORECASE)
         can_start_loose = False
@@ -492,19 +650,22 @@ def parse_pdf_inline(page, hl_rects):
             if len(embedded) >= 2:
                 fm = CHOICE_INLINE_PAT.search(rest)
                 q_stem = rest[: fm.start()].strip() if fm else rest
-                cur = {"id": int(mm.group(1)), "question": q_stem, "choices": list(embedded), "answer": "", "explanation": ""}
+                cur = {"id": int(mm.group(1)), "question": q_stem, "question_rich": rich_text, "choices": list(embedded), "answer": "", "explanation": ""}
             else:
-                cur = {"id": int(mm.group(1)), "question": rest, "choices": [], "answer": "", "explanation": ""}
+                cur = {"id": int(mm.group(1)), "question": rest, "question_rich": rich_text, "choices": [], "answer": "", "explanation": ""}
         elif cur:
             parts = split_choice_segments(text)
             if parts:
                 for p in parts:
-                    cur["choices"].append(p)
+                    p2 = dict(p)
+                    p2["text_rich"] = p2.get("text") or ""
+                    cur["choices"].append(p2)
                     if hl and not cur["answer"]:
-                        cur["answer"] = p["label"]
+                        cur["answer"] = p2["label"]
             elif re.match(r"^[A-Da-d][\.\)]\s*", text):
                 label = text[0].upper()
-                cur["choices"].append({"label": label, "text": re.sub(r"^[A-Da-d][\.\)]\s*", "", text).strip()})
+                choice_text = re.sub(r"^[A-Da-d][\.\)]\s*", "", text).strip()
+                cur["choices"].append({"label": label, "text": choice_text, "text_rich": (rich_text if _looks_like_math_expr(choice_text) else choice_text)})
                 if hl and not cur["answer"]:
                     cur["answer"] = label
             elif re.match(r"^(Đ[áa]p\s*[áa]n|ĐA)\s*[:\-]", text, re.IGNORECASE):
@@ -954,7 +1115,7 @@ def parse_word(content: bytes) -> list:
 #  GOOGLE GEMINI AI PARSER (ĐÃ CẬP NHẬT FIX LỖI ĐỌC DOCX)
 # ══════════════════════════════════════════
 
-GEMINI_PROMPT = """Bạn là chuyên gia trích xuất đề trắc nghiệm (Toán, tiếng Việt).
+GEMINI_PROMPT = """Bạn là chuyên gia trích xuất đề trắc nghiệm (Toán, vật lý, hóa học, sinh học, tiếng Việt).
 
 QUY TẮC BẮT BUỘC:
 - Mỗi phương án A, B, C, D là một object RIÊNG trong "choices". Không gộp hai phương án vào cùng một "text".
@@ -976,18 +1137,34 @@ CHỈ TRẢ VỀ MẢNG JSON THUẦN (không markdown):
 
 def parse_with_gemini_ai(content: bytes, filetype: str, api_key: str) -> list:
     if genai is None:
-        print("Thiếu thư viện google-generativeai, bỏ qua AI parser.")
+        print("Thiếu thư viện google-genai, bỏ qua AI parser.")
         return []
     try:
-        genai.configure(api_key=api_key)
-        model = genai.GenerativeModel('gemini-1.5-flash')
+        if _GENAI_NEW:
+            # New google.genai API
+            client = genai.Client(api_key=api_key)
+        else:
+            # Old google.generativeai API (deprecated)
+            genai.configure(api_key=api_key)
+            model = genai.GenerativeModel('gemini-2.0-flash')
         
         if filetype == "pdf":
             print(f"Đang gửi dữ liệu PDF ({len(content)} bytes) lên Gemini AI...")
-            response = model.generate_content([
-                {"mime_type": "application/pdf", "data": content},
-                GEMINI_PROMPT
-            ])
+            if _GENAI_NEW:
+                from google.genai import types
+                response = client.models.generate_content(
+                    model='gemini-2.0-flash',
+                    contents=[{"mime_type": "application/pdf", "data": content}, GEMINI_PROMPT],
+                    config=types.GenerateContentConfig(
+                        response_mime_type="text/plain"
+                    )
+                )
+            else:
+                response = model.generate_content([
+                    {"mime_type": "application/pdf", "data": content},
+                    GEMINI_PROMPT
+                ])
+            raw = response.text.strip() if hasattr(response, 'text') and response.text else ""
         else:
             # Giải mã DOCX thành chữ trước khi gửi cho AI để chống lỗi 400 Bad Request
             import io
@@ -1008,9 +1185,20 @@ def parse_with_gemini_ai(content: bytes, filetype: str, api_key: str) -> list:
             
             full_text = "\n".join(text_lines)
             print(f"Đang gửi nội dung Word ({len(full_text)} ký tự) lên Gemini AI...")
-            response = model.generate_content([full_text, GEMINI_PROMPT])
-            
-        raw = response.text.strip()
+            if _GENAI_NEW:
+                from google.genai import types
+                response = client.models.generate_content(
+                    model='gemini-2.0-flash',
+                    contents=[full_text, GEMINI_PROMPT],
+                    config=types.GenerateContentConfig(
+                        response_mime_type="text/plain"
+                    )
+                )
+                raw = response.text.strip() if hasattr(response, 'text') and response.text else ""
+            else:
+                response = model.generate_content([full_text, GEMINI_PROMPT])
+                raw = response.text.strip()
+        
         raw = re.sub(r'^```json\s*', '', raw)
         raw = re.sub(r'^```\s*', '', raw)
         raw = re.sub(r'\s*```$', '', raw)
@@ -1285,10 +1473,19 @@ def update_config(body: ConfigBody):
 class AIConfigBody(BaseModel):
     enabled: bool = True
 
+class AIFillConfigBody(BaseModel):
+    enabled: bool = False
+
 @app.post("/config/ai")
 def update_ai_config(body: AIConfigBody):
     repo.set_ai_parse_enabled(body.enabled)
     return {"message": "Đã lưu cài đặt AI", "ai_enabled": body.enabled, "has_key": has_valid_key()}
+
+@app.post("/config/ai-fill")
+def update_ai_fill_config(body: AIFillConfigBody):
+    """Toggle AI Fill feature on/off (independent of Gemini key for upload)."""
+    repo.set_config_value("ai_fill_enabled", body.enabled)
+    return {"message": "Đã lưu", "ai_fill_enabled": body.enabled}
 
 @app.delete("/config/key")
 def delete_api_key():
@@ -1311,6 +1508,7 @@ def get_stats(authorization: str = Header(default="")):
         "best_score": agg["best_score"],
         "ai_available": ok,
         "ai_enabled": cfg.get("ai_parse_enabled", True),
+        "ai_fill_enabled": cfg.get("ai_fill_enabled", False),
         "files": [{"id": fid, "name": f["name"], "count": f["count"], "with_answer": f["with_answer"], "uploaded_at": f["uploaded_at"], "parse_method": f.get("parse_method", "normal")} for fid, f in index.items()]
     }
 
@@ -1352,11 +1550,12 @@ async def upload_file(file: UploadFile = File(...), authorization: str = Header(
                 f"PDF parse thường chất lượng thấp (đáp án={ans_rate:.0f}%, garbled={g_ratio:.2f}). Hãy bật AI Vision rồi upload lại."
             )
 
-        # Parse AI: chỉ chặn khi cực xấu
-        if method == 'gemini_ai' and (ans_rate < 20 or g_ratio >= 0.30):
+        # Parse AI: chỉ chặn khi dữ liệu bị vỡ nặng (không dùng ans_rate để chặn,
+        # vì nhiều đề Toán/Lý/Hóa nguồn không tô sẵn đáp án nên ans_rate có thể thấp nhưng vẫn dùng tốt).
+        if method == 'gemini_ai' and g_ratio >= 0.30:
             raise HTTPException(
                 400,
-                f"PDF parse AI vẫn quá thấp (đáp án={ans_rate:.0f}%, garbled={g_ratio:.2f}). Hard-stop để tránh lưu đề lỗi nặng."
+                f"PDF parse AI vẫn bị lỗi ký tự nặng (garbled={g_ratio:.2f}). Hard-stop để tránh lưu đề lỗi."
             )
 
 
@@ -1570,3 +1769,437 @@ def add_question(file_id: str, body: NewQuestionBody, authorization: str = Heade
     }
     repo.insert_question(uid, file_id, new_q)
     return {"message": "Đã thêm câu hỏi", "question": new_q}
+
+
+# ============================================================
+# AI PIPELINE ENDPOINTS - RAG + MRC cho tự động trả lời
+# ============================================================
+
+class AIAnswerQuestionBody(BaseModel):
+    question: str
+    choices: list  # [{"label": "A", "text": "..."}, ...]
+    subject: str = ""
+    context: str = ""  # Optional context from RAG
+
+class AIAnswerFileBody(BaseModel):
+    file_id: str
+    use_rag: bool = True
+    force_llm: bool = False
+    subject: str = ""  # Optional: override subject
+
+
+@app.post("/ai/answer-question")
+async def ai_answer_question(
+    body: AIAnswerQuestionBody,
+    authorization: str = Header(default="")
+):
+    """
+    Trả lời 1 câu hỏi trắc nghiệm bằng AI (MRC).
+    Input: question + choices [+ context từ RAG]
+    Output: answer + confidence + explanation
+    """
+    _init_ai_services()
+
+    if not _is_ai_pipeline_ready() or not _ai_pipeline:
+        raise HTTPException(503, "AI Pipeline chưa sẵn sàng. Vui lòng kiểm tra GEMINI_API_KEY.")
+
+    user = get_auth_user(authorization)
+
+    result = _ai_pipeline.process_question(
+        question_data={
+            "question": body.question,
+            "choices": body.choices,
+            "subject": body.subject
+        },
+        subject=body.subject,
+        use_rag=False,  # Single question - no need RAG
+        force_llm=True
+    )
+
+    # Log to DB
+    _log_ai_call(
+        user_id=user["uid"],
+        question_id=None,
+        file_id="",
+        model=_mrc_service.model_name if _mrc_service else "unknown",
+        prompt="",
+        response=json.dumps(result, ensure_ascii=False),
+        success=not result.get("error", False)
+    )
+
+    return result
+
+
+@app.post("/ai/answer-file")
+async def ai_answer_file(
+    body: AIAnswerFileBody,
+    authorization: str = Header(default="")
+):
+    """
+    Tự động trả lời TẤT CẢ câu hỏi trong 1 file.
+    - RAG: tìm câu tương tự trong vector DB
+    - LLM: gọi Gemini nếu không tìm thấy
+    - Cache: lưu kết quả vào DB
+    """
+    _init_ai_services()
+
+    if not _is_ai_pipeline_ready() or not _ai_pipeline:
+        raise HTTPException(503, "AI Pipeline chưa sẵn sàng. Vui lòng kiểm tra GEMINI_API_KEY.")
+
+    user = get_auth_user(authorization)
+    uid = user["uid"]
+
+    # Validate file
+    if not repo.file_exists(uid, body.file_id):
+        raise HTTPException(404, "Không tìm thấy file")
+
+    # Get questions
+    questions = repo.get_questions_json(uid, body.file_id)
+    if not questions:
+        raise HTTPException(404, "File không có câu hỏi nào")
+
+    # Get file metadata for subject (nếu có)
+    subject = body.subject
+
+    # Process batch with progress (sync for now)
+    results = []
+    stats = {
+        "from_vector_db": 0,
+        "from_llm": 0,
+        "existing": 0,
+        "errors": 0,
+        "total_confidence": 0.0
+    }
+
+    # Process batch: skip questions that already have answers (avoid wasting API calls)
+    questions_to_fill = [
+        (q, bool(q.get("answer") and str(q.get("answer")).strip() in ["A","B","C","D"]))
+        for q in questions
+    ]
+    need_fill = [(q, had_ans) for q, had_ans in questions_to_fill if not had_ans]
+    total_to_fill = len(need_fill)
+
+    for idx, (q, has_existing_answer) in enumerate(questions_to_fill, 1):
+        # Skip AI processing for questions that already have answers
+        if has_existing_answer:
+            results.append({
+                "question_id": q.get("id"),
+                "question": q.get("question", ""),
+                "answer": q.get("answer", ""),
+                "confidence": 1.0,
+                "explanation": "Đáp án đã có sẵn",
+                "source": "existing",
+                "similar_questions": [],
+                "saved": True,
+            })
+            stats["existing"] += 1
+            continue
+
+        result = _ai_pipeline.process_question(
+            question_data={
+                "id": q.get("id"),
+                "question": q.get("question", ""),
+                "choices": q.get("choices", []),
+                "file_id": body.file_id,
+                "subject": subject
+            },
+            subject=subject,
+            use_rag=body.use_rag,
+            force_llm=body.force_llm
+        )
+        result["question_id"] = q.get("id")
+        result["question"] = q.get("question", "")
+        results.append(result)
+
+        # Save AI answer back to questions DB (only if from LLM/vector_db)
+        src = result.get("source", "")
+        if src in ("llm", "vector_db") and result.get("answer"):
+            try:
+                saved = repo.update_question_row(
+                    uid=uid,
+                    file_id=body.file_id,
+                    q_id=int(q.get("id", 0)),
+                    question=q.get("question", ""),
+                    choices=q.get("choices", []),
+                    answer=result["answer"]
+                )
+                result["saved"] = saved is not None
+                if saved is None:
+                    logger.warning(f"update_question_row returned None for qid={q.get('id')}")
+            except Exception as save_err:
+                logger.error(f"Khong luu duoc answer cho qid={q.get('id')}: {save_err}")
+                result["saved"] = False
+        else:
+            result["saved"] = False
+
+        # Stats
+        if src == "vector_db":
+            stats["from_vector_db"] += 1
+        elif src == "llm":
+            stats["from_llm"] += 1
+        elif src == "existing":
+            stats["existing"] += 1
+        else:
+            stats["errors"] += 1
+
+        stats["total_confidence"] += result.get("confidence", 0)
+
+        # Rate limit protection: small delay between API calls
+        import time
+        time.sleep(0.5)
+
+    # Summary
+    if results:
+        stats["avg_confidence"] = round(stats["total_confidence"] / len(results), 4)
+
+    # filled = newly answered (not existing, not error)
+    stats["filled"] = stats["from_vector_db"] + stats["from_llm"]
+
+    return {
+        "file_id": body.file_id,
+        "total": len(results),
+        "subject": subject,
+        "results": results,
+        "summary": stats,
+        "rag_enabled": body.use_rag,
+        "vector_db_total": _vector_store.count() if _vector_store else 0
+    }
+
+
+@app.get("/ai/similar-questions/{question_id}")
+async def get_similar_questions(
+    question_id: int,
+    file_id: str,
+    top_k: int = 5,
+    subject: str = "",
+    authorization: str = Header(default="")
+):
+    """
+    Tìm câu hỏi tương tự trong vector DB.
+    Dùng để tham khảo trước khi làm quiz.
+    """
+    _init_ai_services()
+
+    if not _is_ai_pipeline_ready() or not _rag_service:
+        raise HTTPException(503, "AI Pipeline chưa sẵn sàng")
+
+    user = get_auth_user(authorization)
+    uid = user["uid"]
+
+    # Validate file
+    if not repo.file_exists(uid, file_id):
+        raise HTTPException(404, "Không tìm thấy file")
+
+    # Lấy câu hỏi gốc
+    questions = repo.get_questions_json(uid, file_id)
+    target_q = next((q for q in questions if q["id"] == question_id), None)
+    if not target_q:
+        raise HTTPException(404, "Không tìm thấy câu hỏi")
+
+    # Tìm similar
+    similar = _rag_service.retrieve_similar(
+        question=target_q["question"],
+        choices=target_q["choices"],
+        top_k=top_k,
+        subject=subject if subject else None
+    )
+
+    return {
+        "question": target_q,
+        "similar_questions": similar,
+        "total_found": len(similar)
+    }
+
+
+@app.post("/ai/answer-quiz")
+async def ai_answer_quiz(
+    session_id: str,
+    authorization: str = Header(default="")
+):
+    """
+    Tự động trả lời toàn bộ quiz session (chỉ lấy kết quả từ AI).
+    """
+    _init_ai_services()
+
+    if not _is_ai_pipeline_ready() or not _ai_pipeline:
+        raise HTTPException(503, "AI Pipeline chưa sẵn sàng")
+
+    user = get_auth_user(authorization)
+    uid = user["uid"]
+
+    # Lấy quiz session
+    quiz = repo.get_quiz_session(session_id)
+    if not quiz:
+        raise HTTPException(404, "Session không tồn tại")
+
+    # Dùng AI trả lời tất cả
+    ai_answers = {}
+    explanations = {}
+
+    for q in quiz:
+        qid = str(q["id"])
+        result = _ai_pipeline.process_question(
+            question_data={
+                "question": q["question"],
+                "choices": q["choices"]
+            },
+            use_rag=True,
+            force_llm=False
+        )
+        ai_answers[qid] = result.get("answer", "")
+        explanations[qid] = {
+            "explanation": result.get("explanation", ""),
+            "confidence": result.get("confidence", 0),
+            "source": result.get("source", "")
+        }
+
+    return {
+        "session_id": session_id,
+        "ai_answers": ai_answers,
+        "explanations": explanations,
+        "total": len(quiz)
+    }
+
+
+@app.get("/ai/stats")
+async def get_ai_stats(authorization: str = Header(default="")):
+    """
+    Thống kê AI: cache hit rate, vector DB size, etc.
+    """
+    _init_ai_services()
+
+    user = get_auth_user(authorization)
+    uid = user["uid"]
+
+    stats = {}
+    if _vector_store:
+        vstats = _vector_store.get_stats()
+        stats.update(vstats)
+
+    # Count user's AI cache entries
+    try:
+        from db import get_connection
+        conn = get_connection()
+        cur = conn.cursor(dictionary=True)
+        cur.execute(
+            "SELECT COUNT(*) as cnt FROM ai_cache WHERE user_id = %s",
+            (uid,)
+        )
+        row = cur.fetchone()
+        stats["user_cache_count"] = row["cnt"] if row else 0
+
+        # Recent LLM calls (last 24h)
+        cur.execute(
+            """
+            SELECT COUNT(*) as cnt, SUM(total_tokens) as tokens, SUM(cost_estimate) as cost
+            FROM ai_llm_logs
+            WHERE user_id = %s AND created_at >= DATE_SUB(NOW(), INTERVAL 1 DAY)
+            """,
+            (uid,)
+        )
+        row = cur.fetchone()
+        stats["llm_calls_24h"] = row["cnt"] if row else 0
+        stats["tokens_24h"] = row["tokens"] if row and row["tokens"] else 0
+        stats["cost_24h_usd"] = round(row["cost"] if row and row["cost"] else 0, 6)
+        cur.close()
+        conn.close()
+    except Exception as e:
+        print(f"Error getting AI stats: {e}")
+
+    return {
+        "user_id": uid,
+        "vector_db": stats,
+        "ai_available": _is_ai_pipeline_ready(),
+        "mrc_model": _mrc_service.model_name if _mrc_service else None
+    }
+
+
+@app.post("/ai/cache/clear")
+async def clear_ai_cache(
+    file_id: str = "",
+    subject: str = "",
+    authorization: str = Header(default="")
+):
+    """
+    Xóa cache AI (cho 1 file hoặc 1 môn).
+    """
+    _init_ai_services()
+
+    user = get_auth_user(authorization)
+    uid = user["uid"]
+
+    deleted = 0
+    try:
+        from db import get_connection
+        conn = get_connection()
+        cur = conn.cursor()
+
+        if file_id:
+            # Xóa cache của file này
+            if _vector_store:
+                _vector_store.delete_by_file(file_id)
+            cur.execute("DELETE FROM ai_cache WHERE user_id = %s AND file_id = %s", (uid, file_id))
+            deleted = cur.rowcount
+        elif subject:
+            if _vector_store:
+                _vector_store.delete_by_subject(subject)
+            cur.execute("DELETE FROM ai_cache WHERE user_id = %s AND subject = %s", (uid, subject))
+            deleted = cur.rowcount
+        else:
+            # Xóa tất cả cache của user
+            cur.execute("DELETE FROM ai_cache WHERE user_id = %s", (uid,))
+            deleted = cur.rowcount
+
+        conn.commit()
+        cur.close()
+        conn.close()
+    except Exception as e:
+        print(f"Error clearing AI cache: {e}")
+        raise HTTPException(500, str(e))
+
+    return {"message": f"Đã xóa {deleted} cache entries"}
+
+
+# ============================================================
+# HELPER FUNCTIONS
+# ============================================================
+
+def _log_ai_call(
+    user_id: str,
+    question_id: int = None,
+    file_id: str = "",
+    model: str = "",
+    prompt: str = "",
+    response: str = "",
+    prompt_tokens: int = 0,
+    response_tokens: int = 0,
+    success: bool = True,
+    error_message: str = ""
+):
+    """Log AI LLM call vào DB."""
+    try:
+        from db import get_connection
+        conn = get_connection()
+        cur = conn.cursor()
+        cur.execute(
+            """
+            INSERT INTO ai_llm_logs
+            (user_id, question_id, file_id, model, prompt_text, response_text,
+             prompt_tokens, response_tokens, total_tokens, cost_estimate, success, error_message)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """,
+            (
+                user_id, question_id, file_id, model,
+                prompt[:5000], response[:10000],
+                prompt_tokens, response_tokens,
+                prompt_tokens + response_tokens,
+                0.0,  # cost_estimate - tính sau nếu cần
+                1 if success else 0,
+                error_message
+            )
+        )
+        conn.commit()
+        cur.close()
+        conn.close()
+    except Exception as e:
+        print(f"Failed to log AI call: {e}")

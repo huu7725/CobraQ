@@ -56,6 +56,8 @@ class SQLiteCursorWrapper:
         # mysql upsert: app_config
         if "INSERT INTO app_config (id, ai_parse_enabled) VALUES (1, ?) ON DUPLICATE KEY UPDATE ai_parse_enabled = ?" in q:
             q = "INSERT INTO app_config (id, ai_parse_enabled) VALUES (1, ?) ON CONFLICT(id) DO UPDATE SET ai_parse_enabled = excluded.ai_parse_enabled"
+        if "INSERT INTO app_config (id, ai_fill_enabled) VALUES (1, %s) ON DUPLICATE KEY UPDATE ai_fill_enabled" in q:
+            q = q  # keep as-is for mysql
             p = p[:1]
 
         # mysql upsert: question_files
@@ -215,6 +217,11 @@ def _run_post_schema_migrations(conn) -> None:
             if not avatar_col:
                 cur.execute("ALTER TABLE users ADD COLUMN avatar_url LONGTEXT")
 
+            # app_config ai_fill_enabled migration
+            cur.execute("SHOW COLUMNS FROM app_config LIKE 'ai_fill_enabled'")
+            if not cur.fetchone():
+                cur.execute("ALTER TABLE app_config ADD COLUMN ai_fill_enabled INTEGER NOT NULL DEFAULT 0")
+
             # questions rich/math fields migrations
             cur.execute("SHOW COLUMNS FROM questions LIKE 'question_rich'")
             if not cur.fetchone():
@@ -254,6 +261,12 @@ def _run_post_schema_migrations(conn) -> None:
                 cur.execute(f"ALTER TABLE users ADD COLUMN {c} {t}")
         cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS uq_users_email ON users(email)")
 
+        # sqlite app_config migration (ai_fill_enabled)
+        cur.execute("PRAGMA table_info(app_config)")
+        ac_cols = {r[1] if not isinstance(r, dict) else r.get('name') for r in cur.fetchall()}
+        if "ai_fill_enabled" not in ac_cols:
+            cur.execute("ALTER TABLE app_config ADD COLUMN ai_fill_enabled INTEGER NOT NULL DEFAULT 0")
+
         # sqlite questions migration (rich/math fields)
         cur.execute("PRAGMA table_info(questions)")
         q_cols = {r[1] if not isinstance(r, dict) else r.get('name') for r in cur.fetchall()}
@@ -270,6 +283,57 @@ def _run_post_schema_migrations(conn) -> None:
             cur.execute("ALTER TABLE questions ADD COLUMN reviewed INTEGER NOT NULL DEFAULT 0")
         if "reviewed_at" not in q_cols:
             cur.execute("ALTER TABLE questions ADD COLUMN reviewed_at DATETIME")
+
+        # === AI PIPELINE TABLES ===
+        # ai_cache
+        cur.execute("PRAGMA table_info(ai_cache)")
+        ai_cache_cols = {r[1] if not isinstance(r, dict) else r.get('name') for r in cur.fetchall()}
+        ai_cache_wanted = {
+            "user_id": "TEXT",
+            "question_hash": "TEXT",
+            "question_text": "TEXT",
+            "answer": "TEXT",
+            "explanation": "TEXT",
+            "confidence": "REAL DEFAULT 0.0",
+            "source": "TEXT DEFAULT 'llm'",
+            "subject": "TEXT DEFAULT ''",
+            "file_id": "TEXT DEFAULT ''",
+            "created_at": "DATETIME DEFAULT CURRENT_TIMESTAMP",
+            "updated_at": "DATETIME DEFAULT CURRENT_TIMESTAMP"
+        }
+        for c, t in ai_cache_wanted.items():
+            if c not in ai_cache_cols:
+                cur.execute(f"ALTER TABLE ai_cache ADD COLUMN {c} {t}")
+        # SQLite: không hỗ trợ prefix length (32) trong index
+        # MySQL cho phép INDEX(column(32)), SQLite thì không
+        cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS uq_ai_cache_user_q ON ai_cache(user_id, question_hash)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_ai_cache_subject ON ai_cache(subject)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_ai_cache_file ON ai_cache(file_id)")
+
+        # ai_llm_logs
+        cur.execute("PRAGMA table_info(ai_llm_logs)")
+        ai_logs_cols = {r[1] if not isinstance(r, dict) else r.get('name') for r in cur.fetchall()}
+        ai_logs_wanted = {
+            "user_id": "TEXT",
+            "question_id": "INTEGER",
+            "file_id": "TEXT DEFAULT ''",
+            "model": "TEXT DEFAULT 'gemini-1.5-flash'",
+            "prompt_text": "TEXT",
+            "response_text": "TEXT",
+            "prompt_tokens": "INTEGER DEFAULT 0",
+            "response_tokens": "INTEGER DEFAULT 0",
+            "total_tokens": "INTEGER DEFAULT 0",
+            "cost_estimate": "REAL DEFAULT 0.0",
+            "success": "INTEGER DEFAULT 1",
+            "error_message": "TEXT",
+            "created_at": "DATETIME DEFAULT CURRENT_TIMESTAMP"
+        }
+        for c, t in ai_logs_wanted.items():
+            if c not in ai_logs_cols:
+                cur.execute(f"ALTER TABLE ai_llm_logs ADD COLUMN {c} {t}")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_ai_logs_user_created ON ai_llm_logs(user_id, created_at)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_ai_logs_file ON ai_llm_logs(file_id)")
+
         conn.commit()
     finally:
         cur.close()
@@ -296,10 +360,11 @@ def init_schema_from_file() -> None:
                 """
                 CREATE TABLE IF NOT EXISTS app_config (
                   id INTEGER PRIMARY KEY,
-                  ai_parse_enabled INTEGER NOT NULL DEFAULT 1
+                  ai_parse_enabled INTEGER NOT NULL DEFAULT 1,
+                  ai_fill_enabled INTEGER NOT NULL DEFAULT 0
                 )
                 """,
-                "INSERT OR IGNORE INTO app_config (id, ai_parse_enabled) VALUES (1, 1)",
+                "INSERT OR IGNORE INTO app_config (id, ai_parse_enabled, ai_fill_enabled) VALUES (1, 1, 0)",
                 """
                 CREATE TABLE IF NOT EXISTS question_files (
                   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -370,6 +435,46 @@ def init_schema_from_file() -> None:
                   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
                 )
                 """,
+                # === AI PIPELINE TABLES ===
+                """
+                CREATE TABLE IF NOT EXISTS ai_cache (
+                  id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  user_id TEXT NOT NULL,
+                  question_hash TEXT NOT NULL,
+                  question_text LONGTEXT NOT NULL,
+                  answer TEXT DEFAULT '',
+                  explanation TEXT,
+                  confidence REAL DEFAULT 0.0,
+                  source TEXT DEFAULT 'llm',
+                  subject TEXT DEFAULT '',
+                  file_id TEXT DEFAULT '',
+                  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                  UNIQUE(user_id, question_hash)
+                )
+                """,
+                "CREATE INDEX IF NOT EXISTS idx_ai_cache_subject ON ai_cache(subject)",
+                "CREATE INDEX IF NOT EXISTS idx_ai_cache_file ON ai_cache(file_id)",
+                """
+                CREATE TABLE IF NOT EXISTS ai_llm_logs (
+                  id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  user_id TEXT NOT NULL,
+                  question_id INTEGER,
+                  file_id TEXT DEFAULT '',
+                  model TEXT DEFAULT 'gemini-1.5-flash',
+                  prompt_text LONGTEXT,
+                  response_text LONGTEXT,
+                  prompt_tokens INTEGER DEFAULT 0,
+                  response_tokens INTEGER DEFAULT 0,
+                  total_tokens INTEGER DEFAULT 0,
+                  cost_estimate REAL DEFAULT 0.0,
+                  success INTEGER DEFAULT 1,
+                  error_message TEXT,
+                  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+                """,
+                "CREATE INDEX IF NOT EXISTS idx_ai_logs_user_created ON ai_llm_logs(user_id, created_at)",
+                "CREATE INDEX IF NOT EXISTS idx_ai_logs_file ON ai_llm_logs(file_id)",
             ]
             for stmt in sqlite_schema:
                 cur.execute(stmt)

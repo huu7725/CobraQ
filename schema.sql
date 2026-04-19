@@ -89,3 +89,45 @@ CREATE TABLE IF NOT EXISTS revoked_tokens (
   KEY idx_revoked_user (user_uid),
   KEY idx_revoked_expires (expires_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- === AI Pipeline Tables ===
+-- Cache các kết quả AI prediction để tái sử dụng (giảm chi phí LLM)
+CREATE TABLE IF NOT EXISTS ai_cache (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  user_id VARCHAR(191) NOT NULL,
+  question_hash CHAR(64) NOT NULL,
+  question_text LONGTEXT NOT NULL,
+  answer CHAR(1) DEFAULT '',
+  explanation TEXT,
+  confidence DECIMAL(5,4) DEFAULT 0.0,
+  source VARCHAR(32) DEFAULT 'llm',
+  subject VARCHAR(100) DEFAULT '',
+  file_id VARCHAR(255) DEFAULT '',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_user_question (user_id, question_hash(32)),
+  KEY idx_subject (subject),
+  KEY idx_file (file_id),
+  KEY idx_created (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Log các lần gọi LLM (audit, cost tracking)
+CREATE TABLE IF NOT EXISTS ai_llm_logs (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  user_id VARCHAR(191) NOT NULL,
+  question_id INT DEFAULT NULL,
+  file_id VARCHAR(255) DEFAULT '',
+  model VARCHAR(100) DEFAULT 'gemini-2.0-flash',
+  prompt_text LONGTEXT,
+  response_text LONGTEXT,
+  prompt_tokens INT DEFAULT 0,
+  response_tokens INT DEFAULT 0,
+  total_tokens INT DEFAULT 0,
+  cost_estimate FLOAT DEFAULT 0.0,
+  success TINYINT(1) DEFAULT 1,
+  error_message TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  KEY idx_user_created (user_id, created_at),
+  KEY idx_file (file_id),
+  KEY idx_question (question_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
