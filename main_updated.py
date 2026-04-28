@@ -37,6 +37,26 @@ try:
 except Exception:
     Image = None
 
+# Science parser — bộ thuật toán STEM
+try:
+    from services.science_parser import (
+        detect_subject,
+        normalize_chemical_formula,
+        normalize_physics_units,
+        enrich_science_fields,
+        looks_garbled_improved,
+        build_rich_text_for_display,
+        classify_math_expression,
+        detect_physics_elements,
+        detect_chemistry_elements,
+    )
+    _SCIENCE_PARSER_OK = True
+except ImportError:
+    _SCIENCE_PARSER_OK = False
+    def detect_subject(*a, **kw): return ("unknown", 0.0, {})
+    def enrich_science_fields(q): return q
+    def looks_garbled_improved(t): return False
+
 # === AI Pipeline Services ===
 # Import với try-except để tránh lỗi nếu chưa cài đặt
 try:
@@ -456,6 +476,11 @@ def enrich_question_rich_fields(q: dict) -> dict:
     qq["choices_rich"] = choices_rich
     qq["parse_confidence"] = round(confidence, 4)
     qq["parse_flags"] = flags
+
+    # === STEM Enrichment: phát hiện môn, công thức, đơn vị ===
+    if _SCIENCE_PARSER_OK:
+        qq = enrich_science_fields(qq)
+
     return qq
 
 
@@ -752,11 +777,18 @@ def _garbled_ratio(questions: list) -> float:
     for q in questions[:120]:
         total += 1
         qq = str(q.get("question") or "")
-        if _looks_garbled_text(qq):
+        garbled = _looks_garbled_text(qq)
+        if _SCIENCE_PARSER_OK and not garbled:
+            garbled = looks_garbled_improved(qq)
+        if garbled:
             bad += 1
             continue
         for c in (q.get("choices") or []):
-            if _looks_garbled_text(str((c or {}).get("text") or "")):
+            ct = str((c or {}).get("text") or "")
+            garbled_c = _looks_garbled_text(ct)
+            if _SCIENCE_PARSER_OK and not garbled_c:
+                garbled_c = looks_garbled_improved(ct)
+            if garbled_c:
                 bad += 1
                 break
     return (bad / total) if total else 1.0
@@ -1114,7 +1146,7 @@ def parse_word(content: bytes) -> list:
 #  GOOGLE GEMINI AI PARSER (ĐÃ CẬP NHẬT FIX LỖI ĐỌC DOCX)
 # ══════════════════════════════════════════
 
-GROQ_PROMPT = """Bạn là chuyên gia trích xuất đề trắc nghiệm (Toán, vật lý, hóa học, sinh học, tiếng Việt).
+GROQ_PROMPT = """Bạn là chuyên gia trích xuất đề trắc nghiệm (Toán, Vật lý, Hóa học, Sinh học).
 
 QUY TẮC BẮT BUỘC:
 - Mỗi phương án A, B, C, D là một object RIÊNG trong "choices". Không gộp hai phương án vào cùng một "text".
@@ -1123,6 +1155,23 @@ QUY TẮC BẮT BUỘC:
 - Giữ ký hiệu toán (căn, phân số, pi, góc) theo đúng nguồn nếu có thể.
 - Nếu cuối file có bảng Đáp án / Mã đề (số câu ↔ A/B/C/D), map đúng "answer" theo số câu.
 - Nếu có đáp án tô màu/in đậm trong đề, dùng làm "answer"; không thì "" hoặc suy luận nếu chắc chắn.
+
+QUY TẮC STEM (Toán / Lý / Hóa):
+- Giữ nguyên subscript: H₂O, CO₂, O₂, N₂, Fe³⁺, SO₄²⁻, CH₃, C₂H₅
+- Giữ nguyên superscript: x², x³, n⁺, e⁻, α, β, γ, 10⁶, 10⁻³
+- Giữ mũi tên hóa: → (phản ứng), ⇌ (cân bằng), ↑ (khí), ↓ (kết tủa)
+- Giữ ký hiệu Hy Lạp: α, β, γ, δ, ω, λ, ν, φ, θ, π, Σ, Δ, Ω, μ, ε, ρ, σ, τ
+- Giữ ký hiệu toán: √, ∫, ∑, ∏, ∂, ∇, ∞, ∈, ∉, ⊂, ⊃, ∪, ∩, ≤, ≥, ≈, ≡, ≠, ±, ÷, ×
+- Giữ đơn vị: m, s, kg, N, J, W, Pa, Hz, Ω, V, A, T, K, °C, mol, L, km/h, m/s, eV, MeV, GeV
+- Giữ công thức hóa: NaCl, H₂SO₄, HCl, NaOH, Ca(OH)₂, NH₄⁺, NO₃⁻, SO₄²⁻, PO₄³⁻, CO₃²⁻
+- Giữ vector: →v, →F, →a, vectơ v, vectơ B
+- Giữ số mũ vật lý: m², m³, kg·m/s², N·m, J/s, Wb·A
+- Phân số: 1/2 → ½, 1/3 → ⅓, 2/3 → ⅔, 3/4 → ¾ (nếu đề gốc dùng fraction thì giữ nguyên)
+- Nếu đề là ảnh scanned hoặc text lỗi font: cố gắng suy luận công thức đúng từ ngữ cảnh
+
+QUY TẮC TIẾNG VIỆT:
+- Giữ dấu tiếng Việt chuẩn: ầ, ơ, ư, ế, ...
+- Không thay đổi nội dung câu hỏi, chỉ tách/sửa format
 
 CHỈ TRẢ VỀ MẢNG JSON THUẦN (không markdown):
 [
@@ -1232,9 +1281,274 @@ def _extract_text_from_pdf(content: bytes) -> str:
         return ""
 
 
-def parse_with_groq_ai(content: bytes, filetype: str, api_key: str) -> list:
-    """Legacy wrapper - redirects to Groq AI parser."""
-    return parse_with_groq_ai(content, filetype, api_key)
+# ══════════════════════════════════════════
+#  IMAGE DETECTION & OCR PIPELINE
+#  Luồng: Có ảnh → OCR/Vision → parse
+#         Không ảnh → AI parser thường
+# ══════════════════════════════════════════
+
+def _has_images_in_pdf(content: bytes) -> bool:
+    """Phát hiện PDF có chứa hình ảnh (ảnh scan, công thức, đề scanned) hay không."""
+    try:
+        import fitz
+        doc = fitz.open(stream=content, filetype="pdf")
+        for page in doc:
+            images = page.get_images(full=True)
+            if images:
+                return True
+            # Kiểm tra xobject dạng form (có thể là ảnh nhúng)
+            xrefs = page.get_xobjects()
+            for xref in xrefs:
+                if xref.get("base_uri") or xref.get("xobj"):
+                    return True
+        doc.close()
+        return False
+    except Exception:
+        return False
+
+
+def _extract_images_from_pdf(content: bytes, max_images: int = 50) -> list:
+    """
+    Trích xuất toàn bộ hình ảnh từ PDF.
+    Trả về list of dict: [{"page": int, "index": int, "image": PIL.Image, "width": int, "height": int}]
+    """
+    extracted = []
+    try:
+        import fitz
+        import io as _io
+        doc = fitz.open(stream=content, filetype="pdf")
+        for page_num, page in enumerate(doc):
+            images = page.get_images(full=True)
+            for img_index, img in enumerate(images):
+                if len(extracted) >= max_images:
+                    break
+                xref = img[0]
+                try:
+                    base_image = doc.extract_image(xref)
+                    img_bytes = base_image.get("image")
+                    if not img_bytes:
+                        continue
+                    ext = base_image.get("ext", "png")
+                    width = base_image.get("width", 0)
+                    height = base_image.get("height", 0)
+                    # Bỏ qua ảnh quá nhỏ (không phải nội dung)
+                    if width < 100 or height < 50:
+                        continue
+                    img_pil = None
+                    if Image:
+                        try:
+                            img_pil = Image.open(_io.BytesIO(img_bytes))
+                        except Exception:
+                            pass
+                    extracted.append({
+                        "page": page_num + 1,
+                        "index": img_index,
+                        "image": img_pil,
+                        "image_bytes": img_bytes,
+                        "width": width,
+                        "height": height,
+                        "ext": ext,
+                    })
+                except Exception:
+                    continue
+            if len(extracted) >= max_images:
+                break
+        doc.close()
+    except Exception as e:
+        print(f"[WARN] Lỗi trích xuất ảnh từ PDF: {e}")
+    return extracted
+
+
+def _ocr_image(img_pil, api_key: str) -> str:
+    """
+    OCR một ảnh bằng Groq Vision API.
+    Trả về text trích xuất được từ ảnh.
+    """
+    try:
+        import requests as _req
+        import base64 as _b64
+        import io as _io
+
+        if not api_key:
+            return ""
+
+        # Chuyển PIL Image → base64
+        if img_pil:
+            buf = _io.BytesIO()
+            img_pil.save(buf, format="PNG")
+            img_bytes = buf.getvalue()
+        else:
+            return ""
+
+        img_b64 = _b64.b64encode(img_bytes).decode("utf-8")
+
+        payload = {
+            "model": "llama-3.2-11b-vision-preview",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "image_url",
+                            "image_url": {"url": f"data:image/png;base64,{img_b64}"}
+                        },
+                        {
+                            "type": "text",
+                            "text": "Đọc toàn bộ nội dung trong ảnh này. Nếu là đề trắc nghiệm, trả về đúng định dạng JSON với các trường: question, choices (mảng A/B/C/D), answer (nếu có). Không thêm markdown."
+                        }
+                    ]
+                }
+            ],
+            "temperature": 0.1,
+            "max_completion_tokens": 2048
+        }
+
+        resp = _req.post(
+            "https://api.groq.com/openai/v1/chat/completions",
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            json=payload,
+            timeout=60
+        )
+
+        if resp.status_code != 200:
+            print(f"[WARN] Groq Vision API error: {resp.status_code}")
+            return ""
+
+        raw = resp.json().get("choices", [{}])[0].get("message", {}).get("content", "")
+        # Cố gắng trích xuất JSON từ response
+        import re as _re
+        m = _re.search(r'\[.*\]', raw, _re.DOTALL)
+        if m:
+            return m.group()
+        return raw.strip()
+
+    except Exception as e:
+        print(f"[WARN] OCR image error: {e}")
+        return ""
+
+
+def _ocr_all_images(images: list, api_key: str, batch_size: int = 3) -> list:
+    """
+    OCR tất cả ảnh trong PDF, trả về list text/json kết quả.
+    Xử lý theo batch để tránh rate limit.
+    """
+    results = []
+    for i in range(0, len(images), batch_size):
+        batch = images[i:i + batch_size]
+        for img_data in batch:
+            print(f"  [OCR] Đang xử lý ảnh page {img_data['page']}, index {img_data['index']} "
+                  f"({img_data['width']}x{img_data['height']})...")
+            ocr_result = _ocr_image(img_data.get("image"), api_key)
+            if ocr_result:
+                results.append({
+                    "page": img_data["page"],
+                    "text": ocr_result,
+                })
+    return results
+
+
+def _has_text_in_pdf(content: bytes) -> bool:
+    """Kiểm tra PDF có text có thể đọc được hay chủ yếu là ảnh (scanned)."""
+    try:
+        import fitz
+        doc = fitz.open(stream=content, filetype="pdf")
+        total_text_len = 0
+        for page in doc:
+            text = page.get_text()
+            total_text_len += len(text.strip())
+            if total_text_len > 200:
+                doc.close()
+                return True
+        doc.close()
+        return total_text_len > 100
+    except Exception:
+        return False
+
+
+def parse_pdf_scanned_or_mixed(content: bytes, api_key: str) -> list:
+    """
+    Luồng OCR cho PDF có ảnh (scanned / ảnh chứa công thức).
+    Kết hợp: trích xuất ảnh → OCR Vision → parse bằng AI.
+    """
+    import fitz
+    import re as _re
+
+    print(f"[ScannedPipeline] Phát hiện PDF có ảnh, bắt đầu luồng OCR...")
+
+    # 1. Trích xuất text thuần (phòng trường hợp vẫn có text lẫn ảnh)
+    pdf_text = _extract_text_from_pdf(content)
+
+    # 2. Trích xuất ảnh
+    images = _extract_images_from_pdf(content)
+    print(f"[ScannedPipeline] Tìm thấy {len(images)} ảnh trong PDF")
+
+    # 3. OCR ảnh bằng Vision API
+    ocr_results = []
+    if images and api_key:
+        ocr_results = _ocr_all_images(images, api_key)
+
+    # 4. Ghép text + OCR → gửi AI parser
+    combined_text = pdf_text
+    if ocr_results:
+        ocr_text_parts = [f"[Nội dung từ ảnh trang {r['page']}]: {r['text']}" for r in ocr_results]
+        combined_text += "\n\n" + "\n\n".join(ocr_text_parts)
+
+    if not combined_text.strip():
+        print("[ScannedPipeline] Không trích xuất được nội dung nào")
+        return []
+
+    # 5. Gửi lên Groq AI parser như bình thường
+    print(f"[ScannedPipeline] Gửi {len(combined_text)} ký tự lên Groq AI parse...")
+    return parse_with_groq_ai_text_only(combined_text, api_key)
+
+
+def parse_with_groq_ai_text_only(text: str, api_key: str) -> list:
+    """Parse text đã trích xuất (từ OCR hoặc PDF thường) bằng Groq AI."""
+    try:
+        import requests as _req
+        import json as _json
+        import re as _re
+
+        if not text.strip():
+            return []
+
+        prompt_text = f"Trích xuất đề trắc nghiệm từ nội dung sau:\n\n{text[:30000]}"
+
+        resp = _req.post(
+            "https://api.groq.com/openai/v1/chat/completions",
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            json={
+                "model": "llama-3.3-70b-versatile",
+                "messages": [
+                    {"role": "system", "content": "Bạn là chuyên gia trích xuất đề trắc nghiệm. Trả lời CHÍNH XÁC mảng JSON thuần, không thêm markdown."},
+                    {"role": "user", "content": GROQ_PROMPT + "\n\n" + prompt_text}
+                ],
+                "temperature": 0.1,
+                "max_completion_tokens": 4096
+            },
+            timeout=120
+        )
+
+        if resp.status_code != 200:
+            print(f"Groq API error: {resp.status_code} - {resp.text[:200]}")
+            return []
+
+        raw = resp.json().get("choices", [{}])[0].get("message", {}).get("content", "")
+        raw = _re.sub(r'^```json\s*', '', raw)
+        raw = _re.sub(r'^```\s*', '', raw)
+        raw = _re.sub(r'\s*```$', '', raw)
+
+        m = _re.search(r'\[.*\]', raw, _re.DOTALL)
+        if m:
+            out = _json.loads(m.group())
+            for q in out:
+                normalize_merged_choices_in_question(q)
+            return out
+        return []
+    except Exception as e:
+        print(f"Lỗi khi gọi Groq AI: {e}")
+        return []
+
 
 def parse_doc_legacy(content: bytes) -> list:
     # Hỗ trợ .doc dạng văn bản thuần; nếu là binary Word cũ thì có thể không đọc được
@@ -1291,22 +1605,58 @@ def smart_parse(content: bytes, filename: str, force_ai: bool = False) -> dict:
 
     need_ai = force_ai or (ai_enabled and ((total > 0 and ans_rate < 30) or total == 0 or garbled))
     if need_ai and ai_ok:
-        method = "groq_ai"
-        try:
-            ai_questions = parse_with_groq_ai(content, filetype, ai_key)
-            if ai_questions:
-                for i, q in enumerate(ai_questions):
-                    q["id"] = i + 1
-                questions = ai_questions
-                
-            total = len(questions)
-            has_ans = sum(1 for q in questions if q.get("answer") in list("ABCD"))
-            ans_rate = round(has_ans / total * 100) if total > 0 else 0
-        except Exception as e:
-            print(f"Groq AI error: {e}")
+        # === ROUTING: Có ảnh → OCR Vision, Không ảnh → AI thường ===
+        if filetype == "pdf":
+            has_imgs = _has_images_in_pdf(content)
+            has_text = _has_text_in_pdf(content)
+
+            if has_imgs and has_text:
+                # PDF hỗn hợp: vừa có text vừa có ảnh → dùng scanned pipeline
+                method = "groq_ai_ocr"
+                print(f"[smart_parse] PDF hỗn hợp (text + images), dùng OCR pipeline")
+                try:
+                    ai_questions = parse_pdf_scanned_or_mixed(content, ai_key)
+                except Exception as e:
+                    print(f"OCR pipeline error: {e}")
+                    ai_questions = []
+            elif has_imgs:
+                # PDF scanned thuần: không có text → OCR pipeline
+                method = "groq_ai_ocr"
+                print(f"[smart_parse] PDF scanned/ảnh, dùng OCR pipeline")
+                try:
+                    ai_questions = parse_pdf_scanned_or_mixed(content, ai_key)
+                except Exception as e:
+                    print(f"OCR pipeline error: {e}")
+                    ai_questions = []
+            else:
+                # PDF text thuần: không ảnh → AI parser thường
+                method = "groq_ai"
+                print(f"[smart_parse] PDF text thuần, dùng AI parser")
+                try:
+                    ai_questions = parse_with_groq_ai(content, filetype, ai_key)
+                except Exception as e:
+                    print(f"Groq AI error: {e}")
+                    ai_questions = []
+        else:
+            # DOCX/DOC → AI parser thường
+            method = "groq_ai"
+            try:
+                ai_questions = parse_with_groq_ai(content, filetype, ai_key)
+            except Exception as e:
+                print(f"Groq AI error: {e}")
+                ai_questions = []
+
+        if ai_questions:
+            for i, q in enumerate(ai_questions):
+                q["id"] = i + 1
+            questions = ai_questions
+
+        total = len(questions)
+        has_ans = sum(1 for q in questions if q.get("answer") in list("ABCD"))
+        ans_rate = round(has_ans / total * 100) if total > 0 else 0
 
     warning = ""
-    if garbled and method != "groq_ai":
+    if garbled and method != "groq_ai" and method != "groq_ai_ocr":
         warning = "PDF có dấu hiệu lỗi font/công thức; nên bật AI parse để tăng độ chính xác."
 
     return {
@@ -1318,6 +1668,7 @@ def smart_parse(content: bytes, filename: str, force_ai: bool = False) -> dict:
         "error": error_msg,
         "warning": warning,
         "garbled_ratio": round(garbled_ratio, 4),
+        "has_images": _has_images_in_pdf(content) if filetype == "pdf" else False,
     }
 
 
@@ -2227,3 +2578,106 @@ def _log_ai_call(
         conn.close()
     except Exception as e:
         print(f"Failed to log AI call: {e}")
+
+
+# ══════════════════════════════════════════
+#  STEM SCIENCE PARSER — ENDPOINTS
+# ══════════════════════════════════════════
+
+class ScienceMetadataBody(BaseModel):
+    question: str = ""
+    choices: list = []
+    subject_override: str = ""
+
+
+@app.post("/science/metadata")
+async def science_metadata(
+    body: ScienceMetadataBody,
+    authorization: str = Header(default="")
+):
+    """
+    Phân tích metadata khoa học cho câu hỏi:
+    - Phát hiện môn học (math/physics/chemistry/biology)
+    - Phân loại công thức toán (fraction, sqrt, exponent, integral, limit, ...)
+    - Phát hiện công thức hóa học, phản ứng
+    - Phát hiện đơn vị vật lý, vector, ký hiệu khoa học
+    - Chuẩn hóa subscript/superscript
+    """
+    if not _SCIENCE_PARSER_OK:
+        return {"error": "Science parser not available", "ok": False}
+
+    q = {
+        "question": body.question,
+        "choices": body.choices,
+    }
+
+    if body.subject_override:
+        q["subject"] = body.subject_override
+
+    enriched = enrich_science_fields(q)
+
+    return {
+        "ok": True,
+        "subject": enriched.get("subject", "unknown"),
+        "subject_confidence": enriched.get("subject_confidence", 0.0),
+        "subject_details": enriched.get("subject_details", {}),
+        "is_stem": enriched.get("is_stem", False),
+        "math_types": enriched.get("math_types", []),
+        "math_formula_count": enriched.get("math_formula_count", 0),
+        "physics": {
+            "has_vector": enriched.get("physics", {}).get("has_vector", False),
+            "has_units": enriched.get("physics", {}).get("has_units", False),
+            "symbols": enriched.get("physics", {}).get("symbols", []),
+            "formulas": enriched.get("physics", {}).get("formulas", []),
+        },
+        "chemistry": {
+            "has_reaction": enriched.get("chemistry", {}).get("has_reaction", False),
+            "has_formula": enriched.get("chemistry", {}).get("has_formula", False),
+            "formulas": enriched.get("chemistry", {}).get("formulas", [])[:10],
+        },
+        "formula_count": enriched.get("formula_count", 0),
+        "normalized_question": enriched.get("_normalized_question", body.question),
+        "normalized_choices": enriched.get("_normalized_choices", body.choices),
+    }
+
+
+@app.post("/science/normalize")
+async def science_normalize(
+    body: ScienceMetadataBody,
+    authorization: str = Header(default="")
+):
+    """
+    Chuẩn hóa công thức khoa học trong text:
+    - H2O → H₂O (subscript hóa học)
+    - 1/2 → ½ (phân số)
+    - --> → → (mũi tên)
+    - m/s → chuẩn hóa đơn vị
+    - x^2 → x² (superscript)
+    """
+    if not _SCIENCE_PARSER_OK:
+        raise HTTPException(503, "Science parser not available")
+
+    text = body.question or ""
+    text = normalize_chemical_formula(normalize_physics_units(text))
+
+    normalized_choices = []
+    for c in body.choices or []:
+        txt = str((c or {}).get("text") or "").strip()
+        lb = (c or {}).get("label", "").strip().upper()
+        txt = normalize_chemical_formula(normalize_physics_units(txt))
+        normalized_choices.append({"label": lb, "text": txt})
+
+    math_types = classify_math_expression(text)
+    physics = detect_physics_elements(text)
+    chemistry = detect_chemistry_elements(text)
+    subject, subj_conf, _ = detect_subject(f"{text} {' '.join(normalized_choices)}")
+
+    return {
+        "normalized_text": text,
+        "normalized_choices": normalized_choices,
+        "math_types": math_types,
+        "physics_units_found": physics.get("has_units", False),
+        "chemistry_formulas_found": chemistry.get("has_formula", False),
+        "detected_subject": subject,
+        "subject_confidence": subj_conf,
+    }
