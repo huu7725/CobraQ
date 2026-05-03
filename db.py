@@ -28,7 +28,6 @@ def _engine() -> str:
     return "mysql" if eng == "mysql" else "sqlite"
 
 
-# ---------- SQLite compatibility wrappers ----------
 class SQLiteCursorWrapper:
     def __init__(self, cur: sqlite3.Cursor, dictionary: bool = False):
         self._cur = cur
@@ -42,25 +41,19 @@ class SQLiteCursorWrapper:
         q = (query or "").strip()
         p = list(params or [])
 
-        # MySQL placeholder -> SQLite placeholder
         q = q.replace("%s", "?")
-
-        # MySQL functions
         q = q.replace("UTC_TIMESTAMP()", "CURRENT_TIMESTAMP")
 
-        # mysql upsert: users
         if "INSERT INTO users (uid, email) VALUES (?, ?) ON DUPLICATE KEY UPDATE email = COALESCE(?, email)" in q:
             q = "INSERT INTO users (uid, email) VALUES (?, ?) ON CONFLICT(uid) DO UPDATE SET email = COALESCE(excluded.email, users.email)"
             p = p[:2]
 
-        # mysql upsert: app_config
         if "INSERT INTO app_config (id, ai_parse_enabled) VALUES (1, ?) ON DUPLICATE KEY UPDATE ai_parse_enabled = ?" in q:
             q = "INSERT INTO app_config (id, ai_parse_enabled) VALUES (1, ?) ON CONFLICT(id) DO UPDATE SET ai_parse_enabled = excluded.ai_parse_enabled"
         if "INSERT INTO app_config (id, ai_fill_enabled) VALUES (1, %s) ON DUPLICATE KEY UPDATE ai_fill_enabled" in q:
             q = q  # keep as-is for mysql
             p = p[:1]
 
-        # mysql upsert: question_files
         if "INSERT INTO question_files" in q and "ON DUPLICATE KEY UPDATE" in q:
             q = (
                 "INSERT INTO question_files (user_uid, file_id, name, filename, parse_method, uploaded_at, file_count, with_answer) "
@@ -70,7 +63,6 @@ class SQLiteCursorWrapper:
                 "uploaded_at=excluded.uploaded_at, file_count=excluded.file_count, with_answer=excluded.with_answer"
             )
 
-        # mysql upsert: quiz_sessions
         if "INSERT INTO quiz_sessions" in q and "ON DUPLICATE KEY UPDATE" in q:
             q = (
                 "INSERT INTO quiz_sessions (session_id, user_uid, file_id, payload_json, expires_at) "
@@ -79,7 +71,6 @@ class SQLiteCursorWrapper:
                 "payload_json=excluded.payload_json, file_id=excluded.file_id, expires_at=excluded.expires_at"
             )
 
-        # mysql upsert: revoked_tokens
         if "INSERT INTO revoked_tokens" in q and "ON DUPLICATE KEY UPDATE" in q:
             q = (
                 "INSERT INTO revoked_tokens (token_hash, token_type, user_uid, expires_at) "
@@ -88,7 +79,6 @@ class SQLiteCursorWrapper:
                 "token_type=excluded.token_type, user_uid=excluded.user_uid, expires_at=excluded.expires_at"
             )
 
-        # SHOW COLUMNS not supported in sqlite
         if q.upper().startswith("SHOW COLUMNS FROM USERS LIKE"):
             q = "SELECT name FROM pragma_table_info('users') WHERE name = 'password_hash'"
             p = []
@@ -103,7 +93,6 @@ class SQLiteCursorWrapper:
             q = f"SELECT name FROM pragma_table_info('questions') WHERE name = '{col_name}'"
             p = []
 
-        # ALTER MODIFY not supported in sqlite -> no-op statement
         if "ALTER TABLE users MODIFY COLUMN password_hash" in q:
             q = "SELECT 1"
             p = []
@@ -143,11 +132,9 @@ class SQLiteConnWrapper:
         self._conn.commit()
 
     def close(self):
-        # keep single sqlite connection open for process lifetime
         return None
 
 
-# ---------- MySQL ----------
 def _mysql_config():
     return {
         "host": os.getenv("DB_HOST", "127.0.0.1"),
@@ -176,7 +163,6 @@ def _get_mysql_pool():
     return _pool
 
 
-# ---------- SQLite ----------
 def _sqlite_path() -> Path:
     v = os.getenv("SQLITE_PATH", "cobraq.sqlite3").strip() or "cobraq.sqlite3"
     p = Path(v)
@@ -217,12 +203,10 @@ def _run_post_schema_migrations(conn) -> None:
             if not avatar_col:
                 cur.execute("ALTER TABLE users ADD COLUMN avatar_url LONGTEXT")
 
-            # app_config ai_fill_enabled migration
             cur.execute("SHOW COLUMNS FROM app_config LIKE 'ai_fill_enabled'")
             if not cur.fetchone():
                 cur.execute("ALTER TABLE app_config ADD COLUMN ai_fill_enabled INTEGER NOT NULL DEFAULT 0")
 
-            # questions rich/math fields migrations
             cur.execute("SHOW COLUMNS FROM questions LIKE 'question_rich'")
             if not cur.fetchone():
                 cur.execute("ALTER TABLE questions ADD COLUMN question_rich LONGTEXT NULL")
@@ -245,7 +229,6 @@ def _run_post_schema_migrations(conn) -> None:
             conn.commit()
             return
 
-        # sqlite lightweight users migration
         cur.execute("PRAGMA table_info(users)")
         cols = {r[1] if not isinstance(r, dict) else r.get('name') for r in cur.fetchall()}
         wanted = {
@@ -261,13 +244,11 @@ def _run_post_schema_migrations(conn) -> None:
                 cur.execute(f"ALTER TABLE users ADD COLUMN {c} {t}")
         cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS uq_users_email ON users(email)")
 
-        # sqlite app_config migration (ai_fill_enabled)
         cur.execute("PRAGMA table_info(app_config)")
         ac_cols = {r[1] if not isinstance(r, dict) else r.get('name') for r in cur.fetchall()}
         if "ai_fill_enabled" not in ac_cols:
             cur.execute("ALTER TABLE app_config ADD COLUMN ai_fill_enabled INTEGER NOT NULL DEFAULT 0")
 
-        # sqlite questions migration (rich/math fields)
         cur.execute("PRAGMA table_info(questions)")
         q_cols = {r[1] if not isinstance(r, dict) else r.get('name') for r in cur.fetchall()}
         q_wanted = {
@@ -284,8 +265,6 @@ def _run_post_schema_migrations(conn) -> None:
         if "reviewed_at" not in q_cols:
             cur.execute("ALTER TABLE questions ADD COLUMN reviewed_at DATETIME")
 
-        # === AI PIPELINE TABLES ===
-        # ai_cache
         cur.execute("PRAGMA table_info(ai_cache)")
         ai_cache_cols = {r[1] if not isinstance(r, dict) else r.get('name') for r in cur.fetchall()}
         ai_cache_wanted = {
@@ -304,13 +283,10 @@ def _run_post_schema_migrations(conn) -> None:
         for c, t in ai_cache_wanted.items():
             if c not in ai_cache_cols:
                 cur.execute(f"ALTER TABLE ai_cache ADD COLUMN {c} {t}")
-        # SQLite: không hỗ trợ prefix length (32) trong index
-        # MySQL cho phép INDEX(column(32)), SQLite thì không
         cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS uq_ai_cache_user_q ON ai_cache(user_id, question_hash)")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_ai_cache_subject ON ai_cache(subject)")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_ai_cache_file ON ai_cache(file_id)")
 
-        # ai_llm_logs
         cur.execute("PRAGMA table_info(ai_llm_logs)")
         ai_logs_cols = {r[1] if not isinstance(r, dict) else r.get('name') for r in cur.fetchall()}
         ai_logs_wanted = {
@@ -435,7 +411,6 @@ def init_schema_from_file() -> None:
                   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
                 )
                 """,
-                # === AI PIPELINE TABLES ===
                 """
                 CREATE TABLE IF NOT EXISTS ai_cache (
                   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -483,7 +458,6 @@ def init_schema_from_file() -> None:
             _run_post_schema_migrations(conn)
             return
 
-        # mysql path: use schema.sql
         sql_path = _ROOT / "schema.sql"
         raw = sql_path.read_text(encoding="utf-8")
         lines = []

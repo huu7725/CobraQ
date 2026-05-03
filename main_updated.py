@@ -6,17 +6,14 @@ from datetime import datetime, timedelta, timezone
 import jwt
 import importlib
 
-# Load .env file if present
 try:
     from dotenv import load_dotenv
     load_dotenv()
 except ImportError:
-    pass  # python-dotenv not installed, use system env vars only
+    pass
 
 logger = logging.getLogger(__name__)
 
-# Import mềm để tránh lỗi khi thiếu package.
-# Ưu tiên SDK mới (google.genai), fallback sang SDK cũ (google.generativeai).
 genai = None
 _GENAI_NEW = False
 try:
@@ -37,7 +34,6 @@ try:
 except Exception:
     Image = None
 
-# Science parser — bộ thuật toán STEM
 try:
     from services.science_parser import (
         detect_subject,
@@ -57,8 +53,6 @@ except ImportError:
     def enrich_science_fields(q): return q
     def looks_garbled_improved(t): return False
 
-# === AI Pipeline Services ===
-# Import với try-except để tránh lỗi nếu chưa cài đặt
 try:
     from services.embedding_service import EmbeddingService
     from services.vector_store import VectorStore
@@ -71,18 +65,13 @@ except ImportError as e:
     print(f"[WARN] AI services chưa sẵn sàng: {e}")
     _AI_MODULES_IMPORTED = False
 
-# OCR (pix2tex) đã bị vô hiệu hóa để tăng tốc parsing.
-# Nếu cần, bật lại bằng cách cài: pip install pix2tex
 def _get_pix2tex_model():
     return False
 
 def _formula_ocr_from_pixmap(pm) -> str:
     return ""
 
-# ══ CẤU HÌNH API KEY ══
-# Chỉ lấy từ biến môi trường/.env, không hardcode trong source.
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "").strip()
-# ════════════════════
 
 app = FastAPI()
 _cors_origins = [o.strip() for o in os.getenv("CORS_ORIGINS", "*").split(",") if o.strip()]
@@ -96,7 +85,6 @@ JWT_EXPIRE_HOURS = int(os.getenv("JWT_EXPIRE_HOURS", "24"))
 JWT_REFRESH_SECRET = os.getenv("JWT_REFRESH_SECRET", JWT_SECRET)
 JWT_REFRESH_EXPIRE_DAYS = int(os.getenv("JWT_REFRESH_EXPIRE_DAYS", "14"))
 
-# === AI PIPELINE GLOBAL INITIALIZATION ===
 _embedding_service = None
 _vector_store = None
 _rag_service = None
@@ -107,7 +95,6 @@ def _init_ai_services():
     """Khởi tạo AI services với khởi tạo song song (parallel init)."""
     global _embedding_service, _vector_store, _rag_service, _mrc_service, _ai_pipeline
 
-    # Already initialized successfully
     if _ai_pipeline is not None:
         return
 
@@ -121,8 +108,6 @@ def _init_ai_services():
         print("[CobraQ] AI Pipeline: Đang khởi tạo (lần đầu, cần tải model...)...")
         print("[CobraQ]   - Dang tai embedding model (neu chua co cache)...")
 
-        # Embedding Service - Song song hoa voi cac service khac
-        # Chi load 1 lan, cac service khac su dung chung instance
         _embedding_service = EmbeddingService(
             model_name=os.getenv("EMBEDDING_MODEL", "paraphrase-multilingual-MiniLM-L12-v2")
         )
@@ -130,7 +115,6 @@ def _init_ai_services():
         print("[CobraQ]   - Embedding model da san sang!")
         print("[CobraQ]   - Khoi tao VectorStore & RAG...")
 
-        # Vector Store + RAG co the khoi tao dong thoi
         _vector_store = VectorStore(
             persist_directory=os.getenv("VECTOR_DB_PATH", "./chroma_db")
         )
@@ -144,7 +128,6 @@ def _init_ai_services():
         print("[CobraQ]   - VectorStore & RAG da san sang!")
         print("[CobraQ]   - Khoi tao Groq MRC...")
 
-        # MRC Service (dùng Groq - Llama) - nhanh, free
         groq_key = GROQ_API_KEY
         if groq_key:
             _mrc_service = MRCService(api_key=groq_key)
@@ -152,7 +135,6 @@ def _init_ai_services():
             print("[WARN] Không có GROQ_API_KEY hợp lệ, AI pipeline sẽ không hoạt động")
             return
 
-        # Full Pipeline
         _ai_pipeline = AIPipeline(
             embedding_service=_embedding_service,
             vector_store=_vector_store,
@@ -164,7 +146,6 @@ def _init_ai_services():
 
         print("[CobraQ] AI Pipeline da san sang (RAG + MRC)")
 
-        # Warmup: goi 1 request nho de kich hoat cache/internal optimization
         _warmup_embedding()
     except Exception as e:
         import traceback
@@ -254,7 +235,6 @@ def _startup_init_db():
     init_schema_from_file()
     repo.cleanup_revoked_tokens()
 
-    # Log trạng thái DB engine + AI key để dễ chẩn đoán khi chạy local/team
     try:
         from db import _engine as _db_engine
         eng = _db_engine()
@@ -319,7 +299,6 @@ def is_red_text(color) -> bool:
     return False
 
 
-# Mốc phương án trong một dòng/ô (Word: "… chủ nghĩa. B. Cách …", "…B.Cách…", NBSP, v.v.)
 CHOICE_INLINE_PAT = re.compile(
     r"(?:^|(?<=\s)|(?<=[\.．,;:]))\b([A-D])[\.\)．:：]\s*",
 )
@@ -449,11 +428,9 @@ def enrich_question_rich_fields(q: dict) -> dict:
     question = str(qq.get("question") or "").strip()
     choices = list(qq.get("choices") or [])
 
-    # Ưu tiên rich text đã OCR được từ parser (pix2tex) nếu có
     question_rich_raw = str(qq.get("question_rich") or "").strip()
     question_rich = question_rich_raw or _to_rich_inline(question)
 
-    # choices_rich ưu tiên text_rich từng choice, fallback sang text thường
     choices_rich = []
     math_hits = 1 if (_looks_like_math_expr(question) or _looks_like_math_expr(question_rich)) else 0
     for c in choices:
@@ -477,7 +454,6 @@ def enrich_question_rich_fields(q: dict) -> dict:
     qq["parse_confidence"] = round(confidence, 4)
     qq["parse_flags"] = flags
 
-    # === STEM Enrichment: phát hiện môn, công thức, đơn vị ===
     if _SCIENCE_PARSER_OK:
         qq = enrich_science_fields(qq)
 
@@ -495,9 +471,6 @@ def _validate_question_choices(choices: list, answer: str) -> tuple[list, str]:
     return clean, ans
 
 
-# ══════════════════════════════════════════
-#  PDF PARSER CHUẨN — (GIỮ NGUYÊN)
-# ══════════════════════════════════════════
 
 def is_highlight(fill):
     if not fill or len(fill) < 3: return False
@@ -661,7 +634,6 @@ def parse_pdf_inline(page, hl_rects):
         m_loose = re.match(r"^(\d+)[\.\:\)]\s*(.+)", text, re.IGNORECASE)
         can_start_loose = False
         if m_loose:
-            # Chỉ cho phép dạng "1. ..." nếu có đáp án A/B/C/D ngay cùng dòng
             probe_rest = (m_loose.group(2) or "").strip()
             can_start_loose = len(split_choice_segments(probe_rest)) >= 3
 
@@ -731,11 +703,9 @@ def _is_likely_valid_mcq(q: dict) -> bool:
     if re.search(r"https?://|www\.|@", question, re.IGNORECASE):
         return False
 
-    # Cần tối thiểu 3 phương án không rỗng
     if len(choices) < 3:
         return False
 
-    # Chặn các đoạn văn bản đời sống/tạp văn hay bị nhận nhầm trong PDF
     if re.search(r"thời\s+gian\s+tập\s+nhảy|chỉ\s+rất\s+thích\s+nhảy|chất\s+lượng\s+sữa|khảo\s+sát|đoạn\s+văn", question, re.IGNORECASE):
         return False
 
@@ -764,7 +734,6 @@ def _looks_garbled_text(s: str) -> bool:
     bad_patterns = [r"[%#@\^~]{2,}", r"[A-Za-z0-9]{1,2}[%#@][A-Za-z0-9]{1,2}", r"K%|Ã|Â|ð|�"]
     if any(re.search(p, t) for p in bad_patterns):
         return True
-    # quá nhiều ký tự lạ ngoài tập toán/latin/vn cơ bản
     weird = re.findall(r"[^\w\s\+\-\*/=\(\)\[\]\{\}\.,:;!?<>&%√πΣ∫≤≥±°'\"\u00C0-\u1EF9]", t, flags=re.UNICODE)
     return len(weird) >= 3
 
@@ -813,14 +782,12 @@ def parse_pdf(content: bytes) -> list:
         except:
             pass
 
-    # Chuẩn hóa + lọc nhiễu
     cleaned = []
     for q in all_questions:
         normalize_merged_choices_in_question(q)
         if _is_likely_valid_mcq(q):
             cleaned.append(q)
 
-    # Khử trùng lặp theo nội dung câu hỏi
     dedup = []
     seen = set()
     for q in cleaned:
@@ -835,9 +802,6 @@ def parse_pdf(content: bytes) -> list:
 
     return dedup
 
-# ══════════════════════════════════════════
-# ════ WORD PARSER — (SIÊU CẤP - XỬ LÝ BẢNG GỘP DÒNG)
-# ══════════════════════════════════════
 
 def _parse_lines(lines):
     questions, cur = [], None
@@ -891,15 +855,12 @@ def _extract_answer_map_from_lines(lines: list[str]) -> dict:
         if not s:
             continue
 
-        # VD: 1A 2B 3C | 1-A | 1:A | 1) A | Câu 1 đáp án B
         for n, a in re.findall(r"\b(?:CÂU\s*)?(\d{1,4})\s*(?:[\)\].:\-=>]|\s)*(?:ĐÁP\s*ÁN\s*)?([ABCD])\b", s):
             ans_map[int(n)] = a
 
-        # VD: Câu 12: đáp án là C
         for n, a in re.findall(r"\bCÂU\s*(\d{1,4})\b[^A-D\n]{0,25}\b([ABCD])\b", s):
             ans_map[int(n)] = a
 
-    # dạng 2 dòng: dòng số + dòng chữ
     for i in range(len(lines) - 1):
         n_line = _normalize_line((lines[i] or ""))
         a_line = _normalize_line((lines[i + 1] or "").upper())
@@ -913,7 +874,6 @@ def _extract_answer_map_from_lines(lines: list[str]) -> dict:
 
 
 def parse_docx_without_docx(content: bytes) -> list:
-    # Fallback khi thiếu python-docx: đọc XML trực tiếp từ file .docx
     import html
     import io
     import re
@@ -988,7 +948,6 @@ def parse_docx_without_docx(content: bytes) -> list:
     lines = [ln.strip() for ln in text.replace("\r", "\n").split("\n") if ln.strip()]
 
     if questions:
-        # map thêm đáp án từ bảng đáp án text nếu có
         answer_map = _extract_answer_map_from_lines(lines)
         for q in questions:
             if not q.get("answer") and q.get("id") in answer_map:
@@ -996,7 +955,6 @@ def parse_docx_without_docx(content: bytes) -> list:
             normalize_merged_choices_in_question(q)
         return questions
 
-    # fallback cuối: parse text thường
     parsed = _parse_lines(lines)
     answer_map = _extract_answer_map_from_lines(lines)
     for q in parsed:
@@ -1018,18 +976,15 @@ def parse_word(content: bytes) -> list:
     max_id = 0
     current_q = None
 
-    # 1. Quét Bảng (Table Parsing - Xử lý lỗi gộp dòng)
     for table in doc.tables:
         for row in table.rows:
             cells = row.cells
             if len(cells) >= 7:
-                # Tách text từng ô theo dấu Enter (để chống lại việc gộp dòng)
                 cell_lines = []
                 for c in cells:
                     lines = [x.strip() for x in c.text.split('\n') if x.strip()]
                     cell_lines.append(lines)
                 
-                # Quét tìm text bôi đậm/tô màu/tô nền (Nhận diện đáp án)
                 correct_keywords = [[], [], [], []]
                 correct_marked = [False, False, False, False]
                 for j in range(4):
@@ -1052,7 +1007,6 @@ def parse_word(content: bytes) -> list:
                 for i in range(max_lines):
                     tt_text = cell_lines[0][i] if i < len(cell_lines[0]) else ""
                     
-                    # Bỏ qua dòng tiêu đề bảng
                     if tt_text.strip().upper() in ["TT", "STT", "SỐ TT"]:
                         continue
 
@@ -1069,10 +1023,8 @@ def parse_word(content: bytes) -> list:
                             ans_text = cell_lines[idx][i] if idx < len(cell_lines) and i < len(cell_lines[idx]) else ""
                             if ans_text:
                                 choices.append({"label": labels[j], "text": ans_text})
-                                # Ưu tiên ô được đánh dấu (bold/color/highlight)
                                 if not correct_ans and correct_marked[j]:
                                     correct_ans = labels[j]
-                                # Fallback: kiểm tra text trùng phần in đậm/tô màu
                                 if not correct_ans and any(k in ans_text for k in correct_keywords[j]):
                                     correct_ans = labels[j]
                         
@@ -1085,7 +1037,6 @@ def parse_word(content: bytes) -> list:
                             "explanation": ""
                         }
                     else:
-                        # Ghép nối câu hỏi bị rớt dòng
                         if current_q:
                             q_text = cell_lines[2][i] if 2 < len(cell_lines) and i < len(cell_lines[2]) else ""
                             if q_text: current_q["question"] += "\n" + q_text
@@ -1104,7 +1055,6 @@ def parse_word(content: bytes) -> list:
         questions.append(current_q)
         max_id = max(max_id, current_q["id"])
 
-    # 2. Quét câu hỏi dạng văn bản thường ngoài bảng (nếu có)
     text_lines = [p.text for p in doc.paragraphs]
     text_questions = _parse_lines(text_lines)
     for tq in text_questions:
@@ -1112,7 +1062,6 @@ def parse_word(content: bytes) -> list:
         tq["id"] = max_id
         questions.append(tq)
 
-    # 3. Quét bảng đáp án ở cuối trang (nếu có)
     answer_map = {}
     for table in doc.tables:
         cells = [c.text.strip() for row in table.rows for c in row.cells]
@@ -1142,9 +1091,6 @@ def parse_word(content: bytes) -> list:
         normalize_merged_choices_in_question(q)
     return questions
 
-# ══════════════════════════════════════════
-#  GOOGLE GEMINI AI PARSER (ĐÃ CẬP NHẬT FIX LỖI ĐỌC DOCX)
-# ══════════════════════════════════════════
 
 GROQ_PROMPT = """Bạn là chuyên gia trích xuất đề trắc nghiệm (Toán, Vật lý, Hóa học, Sinh học).
 
@@ -1281,11 +1227,6 @@ def _extract_text_from_pdf(content: bytes) -> str:
         return ""
 
 
-# ══════════════════════════════════════════
-#  IMAGE DETECTION & OCR PIPELINE
-#  Luồng: Có ảnh → OCR/Vision → parse
-#         Không ảnh → AI parser thường
-# ══════════════════════════════════════════
 
 def _has_images_in_pdf(content: bytes) -> bool:
     """Phát hiện PDF có chứa hình ảnh (ảnh scan, công thức, đề scanned) hay không."""
@@ -1296,7 +1237,6 @@ def _has_images_in_pdf(content: bytes) -> bool:
             images = page.get_images(full=True)
             if images:
                 return True
-            # Kiểm tra xobject dạng form (có thể là ảnh nhúng)
             xrefs = page.get_xobjects()
             for xref in xrefs:
                 if xref.get("base_uri") or xref.get("xobj"):
@@ -1331,7 +1271,6 @@ def _extract_images_from_pdf(content: bytes, max_images: int = 50) -> list:
                     ext = base_image.get("ext", "png")
                     width = base_image.get("width", 0)
                     height = base_image.get("height", 0)
-                    # Bỏ qua ảnh quá nhỏ (không phải nội dung)
                     if width < 100 or height < 50:
                         continue
                     img_pil = None
@@ -1372,7 +1311,6 @@ def _ocr_image(img_pil, api_key: str) -> str:
         if not api_key:
             return ""
 
-        # Chuyển PIL Image → base64
         if img_pil:
             buf = _io.BytesIO()
             img_pil.save(buf, format="PNG")
@@ -1415,7 +1353,6 @@ def _ocr_image(img_pil, api_key: str) -> str:
             return ""
 
         raw = resp.json().get("choices", [{}])[0].get("message", {}).get("content", "")
-        # Cố gắng trích xuất JSON từ response
         import re as _re
         m = _re.search(r'\[.*\]', raw, _re.DOTALL)
         if m:
@@ -1475,19 +1412,15 @@ def parse_pdf_scanned_or_mixed(content: bytes, api_key: str) -> list:
 
     print(f"[ScannedPipeline] Phát hiện PDF có ảnh, bắt đầu luồng OCR...")
 
-    # 1. Trích xuất text thuần (phòng trường hợp vẫn có text lẫn ảnh)
     pdf_text = _extract_text_from_pdf(content)
 
-    # 2. Trích xuất ảnh
     images = _extract_images_from_pdf(content)
     print(f"[ScannedPipeline] Tìm thấy {len(images)} ảnh trong PDF")
 
-    # 3. OCR ảnh bằng Vision API
     ocr_results = []
     if images and api_key:
         ocr_results = _ocr_all_images(images, api_key)
 
-    # 4. Ghép text + OCR → gửi AI parser
     combined_text = pdf_text
     if ocr_results:
         ocr_text_parts = [f"[Nội dung từ ảnh trang {r['page']}]: {r['text']}" for r in ocr_results]
@@ -1497,7 +1430,6 @@ def parse_pdf_scanned_or_mixed(content: bytes, api_key: str) -> list:
         print("[ScannedPipeline] Không trích xuất được nội dung nào")
         return []
 
-    # 5. Gửi lên Groq AI parser như bình thường
     print(f"[ScannedPipeline] Gửi {len(combined_text)} ký tự lên Groq AI parse...")
     return parse_with_groq_ai_text_only(combined_text, api_key)
 
@@ -1551,7 +1483,6 @@ def parse_with_groq_ai_text_only(text: str, api_key: str) -> list:
 
 
 def parse_doc_legacy(content: bytes) -> list:
-    # Hỗ trợ .doc dạng văn bản thuần; nếu là binary Word cũ thì có thể không đọc được
     candidates = ["utf-8", "utf-16", "cp1258", "latin-1"]
     text = ""
     for enc in candidates:
@@ -1599,19 +1530,16 @@ def smart_parse(content: bytes, filename: str, force_ai: bool = False) -> dict:
     garbled_ratio = _garbled_ratio(questions)
     garbled = garbled_ratio >= 0.2
 
-    # Nếu PDF và AI khả dụng thì luôn ưu tiên AI parse (không fallback CPU)
     if filetype == "pdf" and ai_enabled:
         force_ai = True
 
     need_ai = force_ai or (ai_enabled and ((total > 0 and ans_rate < 30) or total == 0 or garbled))
     if need_ai and ai_ok:
-        # === ROUTING: Có ảnh → OCR Vision, Không ảnh → AI thường ===
         if filetype == "pdf":
             has_imgs = _has_images_in_pdf(content)
             has_text = _has_text_in_pdf(content)
 
             if has_imgs and has_text:
-                # PDF hỗn hợp: vừa có text vừa có ảnh → dùng scanned pipeline
                 method = "groq_ai_ocr"
                 print(f"[smart_parse] PDF hỗn hợp (text + images), dùng OCR pipeline")
                 try:
@@ -1620,7 +1548,6 @@ def smart_parse(content: bytes, filename: str, force_ai: bool = False) -> dict:
                     print(f"OCR pipeline error: {e}")
                     ai_questions = []
             elif has_imgs:
-                # PDF scanned thuần: không có text → OCR pipeline
                 method = "groq_ai_ocr"
                 print(f"[smart_parse] PDF scanned/ảnh, dùng OCR pipeline")
                 try:
@@ -1629,7 +1556,6 @@ def smart_parse(content: bytes, filename: str, force_ai: bool = False) -> dict:
                     print(f"OCR pipeline error: {e}")
                     ai_questions = []
             else:
-                # PDF text thuần: không ảnh → AI parser thường
                 method = "groq_ai"
                 print(f"[smart_parse] PDF text thuần, dùng AI parser")
                 try:
@@ -1638,7 +1564,6 @@ def smart_parse(content: bytes, filename: str, force_ai: bool = False) -> dict:
                     print(f"Groq AI error: {e}")
                     ai_questions = []
         else:
-            # DOCX/DOC → AI parser thường
             method = "groq_ai"
             try:
                 ai_questions = parse_with_groq_ai(content, filetype, ai_key)
@@ -1672,9 +1597,6 @@ def smart_parse(content: bytes, filename: str, force_ai: bool = False) -> dict:
     }
 
 
-# ══════════════════════════════════════════
-#  API ENDPOINTS (GIỮ NGUYÊN 100%)
-# ══════════════════════════════════════════
 
 class RegisterBody(BaseModel):
     email: str
@@ -1906,25 +1828,20 @@ async def upload_file(file: UploadFile = File(...), authorization: str = Header(
         err = result.get("error", "")
         raise HTTPException(400, f"Không tìm thấy câu hỏi.{' Chi tiết: '+err if err else ' Thử bật AI Vision.'}")
 
-    # HARD STOP: nếu có AI khả dụng thì PDF bắt buộc đi qua AI parse
     if fname.lower().endswith('.pdf') and result.get('ai_available') and result.get('method') != 'groq_ai':
         raise HTTPException(400, "PDF bắt buộc parse bằng AI khi AI khả dụng. Vui lòng bật Force AI và upload lại.")
 
-    # Quality gate: nới điều kiện để không chặn oan khi đã parse bằng AI
     if fname.lower().endswith('.pdf'):
         g_ratio = float(result.get('garbled_ratio') or 0)
         ans_rate = float(result.get('ans_rate') or 0)
         method = result.get('method') or 'unknown'
 
-        # Parse thường: vẫn chặn tương đối chặt
         if method != 'groq_ai' and (ans_rate < 35 or g_ratio >= 0.12):
             raise HTTPException(
                 400,
                 f"PDF parse thường chất lượng thấp (đáp án={ans_rate:.0f}%, garbled={g_ratio:.2f}). Hãy bật AI Vision rồi upload lại."
             )
 
-        # Parse AI: chỉ chặn khi dữ liệu bị vỡ nặng (không dùng ans_rate để chặn,
-        # vì nhiều đề Toán/Lý/Hóa nguồn không tô sẵn đáp án nên ans_rate có thể thấp nhưng vẫn dùng tốt).
         if method == 'groq_ai' and g_ratio >= 0.30:
             raise HTTPException(
                 400,
@@ -1935,7 +1852,6 @@ async def upload_file(file: UploadFile = File(...), authorization: str = Header(
     base_name = re.sub(r'\.(docx|doc|pdf)$', '', fname, flags=re.IGNORECASE)
     file_id = re.sub(r'[^\w\-]', '_', base_name)[:50]
 
-    # REPLACE mode: upload lại cùng file_id sẽ ghi đè toàn bộ câu cũ
     repo.ensure_user(uid)
     normalized_questions = []
     for i, q in enumerate(questions, start=1):
@@ -2144,21 +2060,18 @@ def add_question(file_id: str, body: NewQuestionBody, authorization: str = Heade
     return {"message": "Đã thêm câu hỏi", "question": new_q}
 
 
-# ============================================================
-# AI PIPELINE ENDPOINTS - RAG + MRC cho tự động trả lời
-# ============================================================
 
 class AIAnswerQuestionBody(BaseModel):
     question: str
-    choices: list  # [{"label": "A", "text": "..."}, ...]
+    choices: list
     subject: str = ""
-    context: str = ""  # Optional context from RAG
+    context: str = ""
 
 class AIAnswerFileBody(BaseModel):
     file_id: str
     use_rag: bool = True
     force_llm: bool = False
-    subject: str = ""  # Optional: override subject
+    subject: str = ""
 
 
 @app.post("/ai/answer-question")
@@ -2185,11 +2098,10 @@ async def ai_answer_question(
             "subject": body.subject
         },
         subject=body.subject,
-        use_rag=False,  # Single question - no need RAG
+        use_rag=False,
         force_llm=True
     )
 
-    # Log to DB
     _log_ai_call(
         user_id=user["uid"],
         question_id=None,
@@ -2222,19 +2134,15 @@ async def ai_answer_file(
     user = get_auth_user(authorization)
     uid = user["uid"]
 
-    # Validate file
     if not repo.file_exists(uid, body.file_id):
         raise HTTPException(404, "Không tìm thấy file")
 
-    # Get questions
     questions = repo.get_questions_json(uid, body.file_id)
     if not questions:
         raise HTTPException(404, "File không có câu hỏi nào")
 
-    # Get file metadata for subject (nếu có)
     subject = body.subject
 
-    # Process batch with progress (sync for now)
     results = []
     stats = {
         "from_vector_db": 0,
@@ -2244,7 +2152,6 @@ async def ai_answer_file(
         "total_confidence": 0.0
     }
 
-    # Process batch: skip questions that already have answers (avoid wasting API calls)
     questions_to_fill = [
         (q, bool(q.get("answer") and str(q.get("answer")).strip() in ["A","B","C","D"]))
         for q in questions
@@ -2253,7 +2160,6 @@ async def ai_answer_file(
     total_to_fill = len(need_fill)
 
     for idx, (q, has_existing_answer) in enumerate(questions_to_fill, 1):
-        # Skip AI processing for questions that already have answers
         if has_existing_answer:
             results.append({
                 "question_id": q.get("id"),
@@ -2284,7 +2190,6 @@ async def ai_answer_file(
         result["question"] = q.get("question", "")
         results.append(result)
 
-        # Save AI answer back to questions DB (only if from LLM/vector_db)
         src = result.get("source", "")
         if src in ("llm", "vector_db") and result.get("answer"):
             try:
@@ -2305,7 +2210,6 @@ async def ai_answer_file(
         else:
             result["saved"] = False
 
-        # Stats
         if src == "vector_db":
             stats["from_vector_db"] += 1
         elif src == "llm":
@@ -2317,17 +2221,14 @@ async def ai_answer_file(
 
         stats["total_confidence"] += result.get("confidence", 0)
 
-        # Skip delay for last question (no more API call after it)
         is_last = (idx == len(questions_to_fill) - 1)
         if not is_last:
             import time
-            time.sleep(0.15)  # Giảm từ 0.5s xuống 0.15s để tăng tốc
+            time.sleep(0.15)
 
-    # Summary
     if results:
         stats["avg_confidence"] = round(stats["total_confidence"] / len(results), 4)
 
-    # filled = newly answered (not existing, not error)
     stats["filled"] = stats["from_vector_db"] + stats["from_llm"]
 
     return {
@@ -2361,17 +2262,14 @@ async def get_similar_questions(
     user = get_auth_user(authorization)
     uid = user["uid"]
 
-    # Validate file
     if not repo.file_exists(uid, file_id):
         raise HTTPException(404, "Không tìm thấy file")
 
-    # Lấy câu hỏi gốc
     questions = repo.get_questions_json(uid, file_id)
     target_q = next((q for q in questions if q["id"] == question_id), None)
     if not target_q:
         raise HTTPException(404, "Không tìm thấy câu hỏi")
 
-    # Tìm similar
     similar = _rag_service.retrieve_similar(
         question=target_q["question"],
         choices=target_q["choices"],
@@ -2402,12 +2300,10 @@ async def ai_answer_quiz(
     user = get_auth_user(authorization)
     uid = user["uid"]
 
-    # Lấy quiz session
     quiz = repo.get_quiz_session(session_id)
     if not quiz:
         raise HTTPException(404, "Session không tồn tại")
 
-    # Dùng AI trả lời tất cả
     ai_answers = {}
     explanations = {}
 
@@ -2451,7 +2347,6 @@ async def get_ai_stats(authorization: str = Header(default="")):
         vstats = _vector_store.get_stats()
         stats.update(vstats)
 
-    # Count user's AI cache entries
     try:
         from db import get_connection
         conn = get_connection()
@@ -2463,7 +2358,6 @@ async def get_ai_stats(authorization: str = Header(default="")):
         row = cur.fetchone()
         stats["user_cache_count"] = row["cnt"] if row else 0
 
-        # Recent LLM calls (last 24h)
         cur.execute(
             """
             SELECT COUNT(*) as cnt, SUM(total_tokens) as tokens, SUM(cost_estimate) as cost
@@ -2510,7 +2404,6 @@ async def clear_ai_cache(
         cur = conn.cursor()
 
         if file_id:
-            # Xóa cache của file này
             if _vector_store:
                 _vector_store.delete_by_file(file_id)
             cur.execute("DELETE FROM ai_cache WHERE user_id = %s AND file_id = %s", (uid, file_id))
@@ -2521,7 +2414,6 @@ async def clear_ai_cache(
             cur.execute("DELETE FROM ai_cache WHERE user_id = %s AND subject = %s", (uid, subject))
             deleted = cur.rowcount
         else:
-            # Xóa tất cả cache của user
             cur.execute("DELETE FROM ai_cache WHERE user_id = %s", (uid,))
             deleted = cur.rowcount
 
@@ -2535,9 +2427,6 @@ async def clear_ai_cache(
     return {"message": f"Đã xóa {deleted} cache entries"}
 
 
-# ============================================================
-# HELPER FUNCTIONS
-# ============================================================
 
 def _log_ai_call(
     user_id: str,
@@ -2568,7 +2457,7 @@ def _log_ai_call(
                 prompt[:5000], response[:10000],
                 prompt_tokens, response_tokens,
                 prompt_tokens + response_tokens,
-                0.0,  # cost_estimate - tính sau nếu cần
+                0.0,
                 1 if success else 0,
                 error_message
             )
@@ -2580,9 +2469,6 @@ def _log_ai_call(
         print(f"Failed to log AI call: {e}")
 
 
-# ══════════════════════════════════════════
-#  STEM SCIENCE PARSER — ENDPOINTS
-# ══════════════════════════════════════════
 
 class ScienceMetadataBody(BaseModel):
     question: str = ""

@@ -323,7 +323,6 @@ undefined.page{animation:pg .26s ease}@keyframes pg{from{opacity:0;transform:tra
 
 <div class="toast" id="tst"></div>
 
-<!-- Profile Modal -->
 <div class="mov" id="pm" onclick="if(event.target===this)cm('pm')">
   <div class="mo">
     <div style="display:flex;justify-content:center;margin-bottom:8px"><label for="avf" style="cursor:pointer;position:relative;display:inline-block"><div class="mav" id="mav">C</div><span style="position:absolute;right:-2px;bottom:-2px;background:var(--p);color:#fff;border-radius:99px;padding:2px 7px;font-size:10px;font-weight:700">Ảnh</span></label><input id="avf" type="file" accept="image/*" style="display:none" onchange="onAvatarPick(this)"></div>
@@ -336,7 +335,6 @@ undefined.page{animation:pg .26s ease}@keyframes pg{from{opacity:0;transform:tra
   </div>
 </div>
 
-<!-- AI Status Modal - CHỈ HIỆN TRẠNG THÁI, không có ô nhập key -->
 <div class="mov" id="aim" onclick="if(event.target===this)cm('aim')">
   <div class="mo" style="max-width:360px">
     <div style="font-size:40px;text-align:center;margin-bottom:10px">🤖</div>
@@ -358,7 +356,6 @@ undefined.page{animation:pg .26s ease}@keyframes pg{from{opacity:0;transform:tra
   </div>
 </div>
 
-<!-- Preview / Edit Questions Modal -->
 <div class="qpm" id="qpm" onclick="if(event.target===this)cm('qpm')">
   <div class="qpm-inner">
     <div class="qpm-hd">
@@ -1082,6 +1079,10 @@ async function saveQ() {
       body: JSON.stringify({question, choices, answer})
     });
     if (!r.ok) throw new Error((await r.json()).detail || 'Lỗi');
+    const updated = (await r.json()).question;
+    const newQ = updated || { ...q, question, choices, answer };
+    QPM.questions[QPM.selIdx] = newQ;
+    QPM.filtered = [...QPM.questions];
     await lst();
     tst('Đã lưu câu hỏi ✓');
     $('qpm-sub').textContent = `${QPM.questions.length} câu hỏi · ${QPM.questions.filter(qpmQuestionHasAnswer).length} có đáp án`;
