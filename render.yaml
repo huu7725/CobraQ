@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: cobraq
+    env: python
+    region: singapore
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn main_updated:app --bind 0.0.0.0:$PORT -w 1 -k uvicorn.workers.UvicornWorker --timeout 120
+    healthCheckPath: /health
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: DB_ENGINE
+        value: sqlite
+      - key: PYTHON_VERSION
+        value: 3.11
