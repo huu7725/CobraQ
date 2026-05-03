@@ -1,19 +1,14 @@
 """
 Embedding Service - Tạo vector embeddings cho câu hỏi trắc nghiệm.
 Sử dụng SentenceTransformer multilingual model hỗ trợ tiếng Việt.
+Lazy loading - model chỉ được tải khi cần, không tải khi import.
 """
 
 import os, threading, logging
 from typing import List, Optional
 import numpy as np
-from sentence_transformers import SentenceTransformer
 
 logger = logging.getLogger(__name__)
-
-# Global singleton + pre-warm state
-_embedding_service_instance = None
-_embedding_init_lock = threading.Lock()
-_embedding_init_done = threading.Event()
 
 
 def _best_device() -> str:
@@ -33,6 +28,7 @@ class EmbeddingService:
     """
     Dịch vụ tạo embeddings cho văn bản sử dụng SentenceTransformer.
     Hỗ trợ nhiều ngôn ngữ, bao gồm tiếng Việt.
+    Lazy loading - model được tải khi lần đầu sử dụng.
     """
 
     DEFAULT_MODEL = "paraphrase-multilingual-MiniLM-L12-v2"
@@ -44,30 +40,35 @@ class EmbeddingService:
         cache_folder: Optional[str] = None
     ):
         """
-        Khởi tạo EmbeddingService.
-
-        Args:
-            model_name: Tên model SentenceTransformer
-            device: 'cpu'/'cuda'/'mps' (auto-detect nếu None)
-            cache_folder: Thư mục cache model
+        Khởi tạo EmbeddingService (lazy - chưa tải model ngay).
         """
-        resolved_device = device or _best_device()
-        if resolved_device not in ("cpu", "cuda", "mps"):
-            resolved_device = "cpu"
+        self.model_name = model_name
+        self._device = device or _best_device()
+        if self._device not in ("cpu", "cuda", "mps"):
+            self._device = "cpu"
+        self._cache_folder = cache_folder or os.path.expanduser("~/.cache/torch/sentence_transformers")
+        self._model = None
 
-        logger.info(f"Đang tải embedding model: {model_name} (device={resolved_device})")
-        try:
-            # Cache folder mặc định: dùng cache có sẵn để tránh download lại
-            resolved_cache = cache_folder or os.path.expanduser("~/.cache/torch/sentence_transformers")
-            self.model = SentenceTransformer(
-                model_name,
-                device=resolved_device,
-                cache_folder=resolved_cache
-            )
-            logger.info(f"Embedding model loaded successfully. Dimension: {self.model.get_sentence_embedding_dimension()}, device: {resolved_device}")
-        except Exception as e:
-            logger.error(f"Lỗi tải embedding model: {e}")
-            raise
+    def _ensure_model(self):
+        """Lazy load model khi cần sử dụng lần đầu."""
+        if self._model is None:
+            logger.info(f"Đang tải embedding model: {self.model_name} (device={self._device})")
+            try:
+                from sentence_transformers import SentenceTransformer
+                self._model = SentenceTransformer(
+                    self.model_name,
+                    device=self._device,
+                    cache_folder=self._cache_folder
+                )
+                logger.info(f"Embedding model loaded. Dimension: {self._model.get_sentence_embedding_dimension()}")
+            except Exception as e:
+                logger.error(f"Lỗi tải embedding model: {e}")
+                raise
+
+    @property
+    def model(self):
+        self._ensure_model()
+        return self._model
 
     def embed_text(self, text: str, normalize: bool = True) -> np.ndarray:
         """
