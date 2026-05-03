@@ -1,5 +1,6 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException, Header
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import json, random, re, os, base64, io, traceback, uuid, logging
 from datetime import datetime, timedelta, timezone
@@ -85,6 +86,11 @@ _cors_origins = [o.strip() for o in os.getenv("CORS_ORIGINS", "*").split(",") if
 if not _cors_origins:
     _cors_origins = ["*"]
 app.add_middleware(CORSMiddleware, allow_origins=_cors_origins, allow_methods=["*"], allow_headers=["*"])
+
+# Serve frontend static files
+_frontend_dist = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "dist")
+if _os.path.isdir(_frontend_dist):
+    app.mount("/", StaticFiles(directory=_frontend_dist, html=True), name="frontend")
 
 JWT_SECRET = os.getenv("JWT_SECRET", "change-me-in-production")
 JWT_ALGORITHM = "HS256"
