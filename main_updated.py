@@ -88,8 +88,8 @@ if not _cors_origins:
 app.add_middleware(CORSMiddleware, allow_origins=_cors_origins, allow_methods=["*"], allow_headers=["*"])
 
 # Serve frontend static files
-_frontend_dist = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "dist")
-if _os.path.isdir(_frontend_dist):
+_frontend_dist = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dist")
+if os.path.isdir(_frontend_dist):
     app.mount("/", StaticFiles(directory=_frontend_dist, html=True), name="frontend")
 
 JWT_SECRET = os.getenv("JWT_SECRET", "change-me-in-production")
