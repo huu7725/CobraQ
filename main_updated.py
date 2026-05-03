@@ -6,13 +6,15 @@ from datetime import datetime, timedelta, timezone
 import jwt
 import importlib
 
+
 try:
     from dotenv import load_dotenv
     load_dotenv()
 except ImportError:
-    pass
+    pass  
 
 logger = logging.getLogger(__name__)
+
 
 genai = None
 _GENAI_NEW = False
@@ -34,6 +36,7 @@ try:
 except Exception:
     Image = None
 
+
 try:
     from services.science_parser import (
         detect_subject,
@@ -53,6 +56,7 @@ except ImportError:
     def enrich_science_fields(q): return q
     def looks_garbled_improved(t): return False
 
+
 try:
     from services.embedding_service import EmbeddingService
     from services.vector_store import VectorStore
@@ -65,13 +69,16 @@ except ImportError as e:
     print(f"[WARN] AI services chưa sẵn sàng: {e}")
     _AI_MODULES_IMPORTED = False
 
+
 def _get_pix2tex_model():
     return False
 
 def _formula_ocr_from_pixmap(pm) -> str:
     return ""
 
+
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "").strip()
+
 
 app = FastAPI()
 _cors_origins = [o.strip() for o in os.getenv("CORS_ORIGINS", "*").split(",") if o.strip()]
@@ -85,6 +92,7 @@ JWT_EXPIRE_HOURS = int(os.getenv("JWT_EXPIRE_HOURS", "24"))
 JWT_REFRESH_SECRET = os.getenv("JWT_REFRESH_SECRET", JWT_SECRET)
 JWT_REFRESH_EXPIRE_DAYS = int(os.getenv("JWT_REFRESH_EXPIRE_DAYS", "14"))
 
+
 _embedding_service = None
 _vector_store = None
 _rag_service = None
@@ -94,6 +102,7 @@ _ai_pipeline = None
 def _init_ai_services():
     """Khởi tạo AI services với khởi tạo song song (parallel init)."""
     global _embedding_service, _vector_store, _rag_service, _mrc_service, _ai_pipeline
+
 
     if _ai_pipeline is not None:
         return
@@ -107,6 +116,8 @@ def _init_ai_services():
 
         print("[CobraQ] AI Pipeline: Đang khởi tạo (lần đầu, cần tải model...)...")
         print("[CobraQ]   - Dang tai embedding model (neu chua co cache)...")
+
+
 
         _embedding_service = EmbeddingService(
             model_name=os.getenv("EMBEDDING_MODEL", "paraphrase-multilingual-MiniLM-L12-v2")
@@ -128,12 +139,14 @@ def _init_ai_services():
         print("[CobraQ]   - VectorStore & RAG da san sang!")
         print("[CobraQ]   - Khoi tao Groq MRC...")
 
+
         groq_key = GROQ_API_KEY
         if groq_key:
             _mrc_service = MRCService(api_key=groq_key)
         else:
             print("[WARN] Không có GROQ_API_KEY hợp lệ, AI pipeline sẽ không hoạt động")
             return
+
 
         _ai_pipeline = AIPipeline(
             embedding_service=_embedding_service,
@@ -146,6 +159,7 @@ def _init_ai_services():
 
         print("[CobraQ] AI Pipeline da san sang (RAG + MRC)")
 
+        
         _warmup_embedding()
     except Exception as e:
         import traceback
@@ -235,6 +249,7 @@ def _startup_init_db():
     init_schema_from_file()
     repo.cleanup_revoked_tokens()
 
+   
     try:
         from db import _engine as _db_engine
         eng = _db_engine()
@@ -803,6 +818,7 @@ def parse_pdf(content: bytes) -> list:
     return dedup
 
 
+
 def _parse_lines(lines):
     questions, cur = [], None
     for line in lines:
@@ -1092,6 +1108,7 @@ def parse_word(content: bytes) -> list:
     return questions
 
 
+
 GROQ_PROMPT = """Bạn là chuyên gia trích xuất đề trắc nghiệm (Toán, Vật lý, Hóa học, Sinh học).
 
 QUY TẮC BẮT BUỘC:
@@ -1353,6 +1370,7 @@ def _ocr_image(img_pil, api_key: str) -> str:
             return ""
 
         raw = resp.json().get("choices", [{}])[0].get("message", {}).get("content", "")
+
         import re as _re
         m = _re.search(r'\[.*\]', raw, _re.DOTALL)
         if m:
@@ -1598,6 +1616,7 @@ def smart_parse(content: bytes, filename: str, force_ai: bool = False) -> dict:
 
 
 
+
 class RegisterBody(BaseModel):
     email: str
     password: str
@@ -1744,6 +1763,12 @@ def admin_update_role(uid: str, body: UpdateRoleBody, authorization: str = Heade
     if not ok:
         raise HTTPException(404, "Không tìm thấy user")
     return {"message": "Đã cập nhật role", "uid": uid, "role": role}
+
+
+@app.get("/health")
+def health_check():
+    """Health check endpoint for Render."""
+    return {"status": "ok", "service": "CobraQ"}
 
 
 @app.get("/config")
@@ -2061,17 +2086,18 @@ def add_question(file_id: str, body: NewQuestionBody, authorization: str = Heade
 
 
 
+
 class AIAnswerQuestionBody(BaseModel):
     question: str
-    choices: list
+    choices: list  
     subject: str = ""
-    context: str = ""
+    context: str = ""  
 
 class AIAnswerFileBody(BaseModel):
     file_id: str
     use_rag: bool = True
     force_llm: bool = False
-    subject: str = ""
+    subject: str = ""  
 
 
 @app.post("/ai/answer-question")
@@ -2098,9 +2124,10 @@ async def ai_answer_question(
             "subject": body.subject
         },
         subject=body.subject,
-        use_rag=False,
+        use_rag=False,  
         force_llm=True
     )
+
 
     _log_ai_call(
         user_id=user["uid"],
@@ -2134,14 +2161,18 @@ async def ai_answer_file(
     user = get_auth_user(authorization)
     uid = user["uid"]
 
+
     if not repo.file_exists(uid, body.file_id):
         raise HTTPException(404, "Không tìm thấy file")
+
 
     questions = repo.get_questions_json(uid, body.file_id)
     if not questions:
         raise HTTPException(404, "File không có câu hỏi nào")
 
+
     subject = body.subject
+
 
     results = []
     stats = {
@@ -2224,8 +2255,7 @@ async def ai_answer_file(
         is_last = (idx == len(questions_to_fill) - 1)
         if not is_last:
             import time
-            time.sleep(0.15)
-
+            time.sleep(0.15)  
     if results:
         stats["avg_confidence"] = round(stats["total_confidence"] / len(results), 4)
 
@@ -2457,7 +2487,7 @@ def _log_ai_call(
                 prompt[:5000], response[:10000],
                 prompt_tokens, response_tokens,
                 prompt_tokens + response_tokens,
-                0.0,
+                0.0,  
                 1 if success else 0,
                 error_message
             )
