@@ -19,10 +19,10 @@ Thumbs.db
 
 *.log
 logs/
-
-
-
 data/
+*.sqlite3
+*.sqlite
+chroma_db/
 
 .env
 .env.*
