@@ -1,0 +1,1 @@
+{"access_token":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZG1pbkB0ZXN0LmNvbSIsIm5hbWUiOiJBZG1pbiIsInJvbGUiOiJhZG1pbiIsImV4cCI6MTc4MDAyNzk0OH0._rCSD30aOcJMjtcZilxbDClop1XPJmS9ZdOJi84w2SM","token_type":"bearer","user":{"email":"admin@test.com","name":"Admin","role":"admin"}}

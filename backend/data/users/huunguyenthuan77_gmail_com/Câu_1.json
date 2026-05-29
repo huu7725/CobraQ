@@ -1,0 +1,26 @@
+[
+  {
+    "id": 1,
+    "question": "Một trong những địa điểm diễn ra các hoạt động đối ngoại của Phan Bội Châu là",
+    "choices": [
+      {
+        "label": "A",
+        "text": "Nhật."
+      },
+      {
+        "label": "B",
+        "text": "Anh."
+      },
+      {
+        "label": "C",
+        "text": "Đức."
+      },
+      {
+        "label": "D",
+        "text": "Ấn Độ."
+      }
+    ],
+    "answer": "B",
+    "explanation": ""
+  }
+]

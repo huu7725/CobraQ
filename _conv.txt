@@ -1,0 +1,9 @@
+# Convert DOCX to PDF using LibreOffice
+# pip install python-docx  (already installed)
+# LibreOffice must be installed on the system
+# Then run: soffice --headless --convert-to pdf "D:\data test\Câu 1.docx" --outdir "D:\data test"
+
+print("To convert DOCX to PDF for better AI answer extraction:")
+print("1. Install LibreOffice: https://www.libreoffice.org/download/download/")
+print("2. Run in CMD: soffice --headless --convert-to pdf 'D:\\data test\\Câu 1.docx' --outdir 'D:\\data test'")
+print("3. Upload the .pdf file instead of .docx")

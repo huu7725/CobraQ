@@ -1,0 +1,64 @@
+[
+  {
+    "id": "994331EF",
+    "code": "994331EF",
+    "name": "Toan 10A",
+    "teacher_email": "admin@test.com",
+    "teacher_name": "Admin",
+    "created_at": "1779884797",
+    "members": [],
+    "files": []
+  },
+  {
+    "id": "03A532CA",
+    "code": "03A532CA",
+    "name": "lịch sử",
+    "teacher_email": "huunguyenthuan77@gmail.com",
+    "teacher_name": "thuan",
+    "created_at": "1779884797",
+    "members": [
+      {
+        "email": "thuan@gmail.com",
+        "name": "thuan",
+        "joined_at": "1779884797"
+      },
+      {
+        "email": "abc@st.qnu.vn",
+        "name": "abc",
+        "joined_at": "1779884797"
+      }
+    ],
+    "files": [
+      {
+        "file_id": "thuvienhoclieu_com-De-cuong-on-tap-cuoi-HK2-Lich-s",
+        "name": "thuvienhoclieu.com-De-cuong-on-tap-cuoi-HK2-Lich-su-12-Canh-dieu-24-25",
+        "added_at": "1779884797",
+        "num_questions": 30,
+        "time_limit": 45
+      },
+      {
+        "file_id": "Câu_1",
+        "name": "Câu 1",
+        "added_at": "1779884797",
+        "num_questions": 1,
+        "time_limit": 0
+      }
+    ]
+  },
+  {
+    "id": "428E8670",
+    "code": "428E8670",
+    "name": "toán",
+    "teacher_email": "huunguyenthuan77@gmail.com",
+    "teacher_name": "thuan",
+    "created_at": "1779884797",
+    "members": [
+      {
+        "email": "abc@st.qnu.vn",
+        "name": "abc",
+        "joined_at": "1779884797"
+      }
+    ],
+    "files": []
+  }
+]

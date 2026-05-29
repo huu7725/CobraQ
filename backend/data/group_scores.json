@@ -1,0 +1,74 @@
+{
+  "95E5CA1D": {
+    "thuvienhoclieu_com-De-cuong-on-tap-cuoi-HK2-Lich-s": {
+      "admin@test.com": {
+        "score": 0,
+        "percent": 0,
+        "time_taken": 30,
+        "answers": {
+          "0": "B",
+          "1": "A",
+          "2": "D"
+        },
+        "total_questions": 3,
+        "submitted_at": "1779884797"
+      },
+      "guest": {
+        "score": 3,
+        "percent": 60,
+        "time_taken": 60,
+        "answers": {
+          "0": "A",
+          "1": "A",
+          "2": "A",
+          "3": "B",
+          "4": "A"
+        },
+        "total_questions": 5,
+        "submitted_at": "1779884797"
+      }
+    }
+  },
+  "03A532CA": {
+    "thuvienhoclieu_com-De-cuong-on-tap-cuoi-HK2-Lich-s": {
+      "thuan@gmail.com": {
+        "score": 2,
+        "percent": 40,
+        "time_taken": 30,
+        "answers": {
+          "0": "C",
+          "1": "D",
+          "2": "B",
+          "3": "D",
+          "4": "D"
+        },
+        "total_questions": 5,
+        "submitted_at": "1779884797"
+      },
+      "abc@st.qnu.vn": {
+        "name": "abc",
+        "score": 0,
+        "percent": 0,
+        "time_taken": 3,
+        "answers": {
+          "29": "C"
+        },
+        "total_questions": 30,
+        "submitted_at": "1779884797"
+      }
+    },
+    "Câu_1": {
+      "abc@st.qnu.vn": {
+        "name": "abc",
+        "score": 1,
+        "percent": 100,
+        "time_taken": 1,
+        "answers": {
+          "0": "B"
+        },
+        "total_questions": 1,
+        "submitted_at": "1779884797"
+      }
+    }
+  }
+}

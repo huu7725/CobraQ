@@ -1,0 +1,48 @@
+[
+  {
+    "id": 1,
+    "date": "29/05/2026 15:56",
+    "score": 1,
+    "total": 1,
+    "percent": 100,
+    "time_taken": 2,
+    "file_id": "all",
+    "wrong_questions": []
+  },
+  {
+    "id": 2,
+    "date": "29/05/2026 16:00",
+    "score": 1,
+    "total": 1,
+    "percent": 100,
+    "time_taken": 1,
+    "file_id": "all",
+    "wrong_questions": []
+  },
+  {
+    "id": 3,
+    "date": "29/05/2026 16:06",
+    "score": 1,
+    "total": 1,
+    "percent": 100,
+    "time_taken": 1,
+    "file_id": "Câu_1",
+    "wrong_questions": []
+  },
+  {
+    "id": 4,
+    "date": "29/05/2026 16:39",
+    "score": 0,
+    "total": 30,
+    "percent": 0,
+    "time_taken": 3,
+    "file_id": "thuvienhoclieu_com-De-cuong-on-tap-cuoi-HK2-Lich-s",
+    "wrong_questions": [
+      "Nội dung nào sau đây thể hiện mục đích của việc Chủ tịch Hồ ",
+      "Phát triển hợp tác vì sự nghiệp xây dựng đất nước phồn vinh ",
+      "Tư tưởng cốt lõi của Cương lĩnh chính trị tháng 2 năm 1930 l",
+      "Các hoạt động đối ngoại thực hiện trong giai đoạn từ sau Các",
+      "Một trong những nội dung được Nguyễn Ái Quốc xác định là con"
+    ]
+  }
+]

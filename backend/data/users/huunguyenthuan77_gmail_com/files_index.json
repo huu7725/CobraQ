@@ -1,0 +1,20 @@
+{
+  "thuvienhoclieu_com-De-cuong-on-tap-cuoi-HK2-Lich-s": {
+    "name": "thuvienhoclieu.com-De-cuong-on-tap-cuoi-HK2-Lich-su-12-Canh-dieu-24-25",
+    "filename": "thuvienhoclieu.com-De-cuong-on-tap-cuoi-HK2-Lich-su-12-Canh-dieu-24-25.docx",
+    "count": 116,
+    "with_answer": 116,
+    "uploaded_at": "29/05/2026 09:25",
+    "file_id": "thuvienhoclieu_com-De-cuong-on-tap-cuoi-HK2-Lich-s",
+    "parse_method": "normal"
+  },
+  "Câu_1": {
+    "name": "Câu 1",
+    "filename": "Câu 1.docx",
+    "count": 1,
+    "with_answer": 0,
+    "uploaded_at": "29/05/2026 12:09",
+    "file_id": "Câu_1",
+    "parse_method": "vision_ai"
+  }
+}

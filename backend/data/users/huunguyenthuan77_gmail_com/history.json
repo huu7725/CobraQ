@@ -1,0 +1,118 @@
+[
+  {
+    "id": 1,
+    "date": "29/05/2026 12:10",
+    "score": 1,
+    "total": 1,
+    "percent": 100,
+    "time_taken": 3,
+    "file_id": "Câu_1",
+    "wrong_questions": []
+  },
+  {
+    "id": 2,
+    "date": "29/05/2026 13:00",
+    "score": 0,
+    "total": 10,
+    "percent": 0,
+    "time_taken": 6,
+    "file_id": "thuvienhoclieu_com-De-cuong-on-tap-cuoi-HK2-Lich-s",
+    "wrong_questions": [
+      "Nhận định nào sau đây là đúng về sự kiện Nguyễn Ái Quốc bỏ p",
+      "Hiệp định đầu tiên mà Chủ tịch Hồ Chí Minh thay mặt chính ph",
+      "Một trong các cơ hội khi Việt Nam tham gia vào các tổ chức q",
+      "Một trong những nguyên nhân thúc đầy phong trào yêu nước, ph",
+      "Người Cộng sản đầu tiên của dân tộc Việt Nam là"
+    ]
+  },
+  {
+    "id": 3,
+    "date": "29/05/2026 16:15",
+    "score": 1,
+    "total": 1,
+    "percent": 100,
+    "time_taken": 14,
+    "file_id": "Câu_1",
+    "wrong_questions": []
+  },
+  {
+    "id": 4,
+    "date": "29/05/2026 16:36",
+    "score": 0,
+    "total": 10,
+    "percent": 0,
+    "time_taken": 7,
+    "file_id": "all",
+    "wrong_questions": [
+      "Trong giai đoạn từ năm 1960-1969, Hồ Chí Minh đảm nhận cương",
+      "Năm 1917, Nguyễn Tất Thành tham gia vào tổ chức nào sau đây?",
+      "Trong quá trình ra đi tìm đường cứu nước, từ năm 1912 đến nă",
+      "Đầu thế kỷ XX, nhân vật tiên phong tìm đến trào lưu dân chủ ",
+      "Yếu tố nào quyết định đến sự lựa chọn con đường cứu nước the"
+    ]
+  },
+  {
+    "id": 5,
+    "date": "29/05/2026 16:37",
+    "score": 0,
+    "total": 10,
+    "percent": 0,
+    "time_taken": 2,
+    "file_id": "all",
+    "wrong_questions": [
+      "Nhiệm vụ cấp bách nhất đặt ra cho dân tộc Việt Nam trong nhữ",
+      "Hiệp định đầu tiên mà Chủ tịch Hồ Chí Minh thay mặt chính ph",
+      "Cuối năm 1929, đầu năm 1930, Nguyễn Ái Quốc đã triệu tập hội",
+      "Một trong những địa điểm diễn ra các hoạt động đối ngoại của",
+      "Nội dung nào sau đây là hạn chế trong Hiệp định Giơ-ne-vơ 19"
+    ]
+  },
+  {
+    "id": 6,
+    "date": "29/05/2026 16:37",
+    "score": 0,
+    "total": 10,
+    "percent": 0,
+    "time_taken": 2,
+    "file_id": "all",
+    "wrong_questions": [
+      "Tổ chức nào do sau đây do Nguyễn Ái Quốc thành lập, được xem",
+      "Nội dung nào sau đây thể hiện mục đích của việc Chủ tịch Hồ ",
+      "Yếu tố nào quyết định đến sự lựa chọn con đường cứu nước the",
+      "Sự kiện nào đây có ý nghĩa là bước ngoặt mới đối với cuộc kh",
+      "Đầu năm 1930, Nguyễn Ái Quốc đã có hoạt động nào sau đây?"
+    ]
+  },
+  {
+    "id": 7,
+    "date": "29/05/2026 16:38",
+    "score": 1,
+    "total": 10,
+    "percent": 10,
+    "time_taken": 5,
+    "file_id": "thuvienhoclieu_com-De-cuong-on-tap-cuoi-HK2-Lich-s",
+    "wrong_questions": [
+      "Tờ báo nào sau đây do Nguyễn Ái Quốc là chủ nhiệm kiêm chủ b",
+      "Nội dung nào sau đây thể hiện đúng vai trò của Chủ tịch Hồ C",
+      "Nội dung nào sau đây là một trong những mục đích các chuyến ",
+      "Nội dung nào sau đây không phải là truyền thống quý báu của ",
+      "Các hoạt động đối ngoại thực hiện trong giai đoạn từ sau Các"
+    ]
+  },
+  {
+    "id": 8,
+    "date": "29/05/2026 16:43",
+    "score": 2,
+    "total": 20,
+    "percent": 10,
+    "time_taken": 6,
+    "file_id": "all",
+    "wrong_questions": [
+      "Tờ báo nào sau đây do Nguyễn Ái Quốc là chủ nhiệm kiêm chủ b",
+      "Nội dung nào sau đây thể hiện đúng vai trò của Chủ tịch Hồ C",
+      "Trong giai đoạn 1975 đến 1985 Việt Nam đã tham gia",
+      "Một trong những ngôi trường Nguyễn Tất Thành đã từng dạy học",
+      "Một trong công lao của Nguyễn Ái Quốc/Hồ Chí Minh đối với dâ"
+    ]
+  }
+]

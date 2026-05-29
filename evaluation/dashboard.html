@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>CobraQ — Evaluation Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Outfit:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#f0f2f9;--w:#fff;--p:#5b21b6;--p2:#7c3aed;--p3:#ede9fe;--pd:#3b0764;
+  --g:#059669;--r:#dc2626;--a:#d97706;--t:#1e1b4b;--t2:#6b7280;--t3:#9ca3af;
+  --bd:#e5e7eb;--sh:0 2px 16px rgba(91,33,182,.08);--shl:0 8px 32px rgba(91,33,182,.14);--rad:16px
+}
+html,body{height:100%;font-family:'Plus Jakarta Sans',sans-serif;color:var(--t);background:var(--bg)}
+body{display:flex;flex-direction:column;overflow:hidden}
+.hdr{
+  background:linear-gradient(135deg,var(--pd),var(--p),var(--p2));
+  padding:20px 28px;color:#fff;flex-shrink:0;
+  display:flex;align-items:center;justify-content:space-between;
+}
+.hdr h1{font-family:'Outfit',sans-serif;font-size:22px;font-weight:900;display:flex;align-items:center;gap:10px}
+.hdr .badge{padding:4px 12px;border-radius:99px;font-size:11px;font-weight:700;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.2)}
+.hdr .actions{display:flex;gap:10px}
+.btn{padding:8px 16px;border-radius:9px;border:none;font-size:13px;font-weight:700;cursor:pointer;font-family:'Plus Jakarta Sans',sans-serif;transition:all .15s}
+.btn-r{background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.25)}
+.btn-r:hover{background:rgba(255,255,255,.25)}
+.btn-g{background:var(--g);color:#fff}
+.btn-g:hover{filter:brightness(1.1)}
+
+.main{flex:1;overflow-y:auto;padding:24px;display:grid;grid-template-columns:1fr 340px;gap:20px;min-height:0}
+
+.col{display:flex;flex-direction:column;gap:16px}
+.card{background:var(--w);border-radius:var(--rad);padding:20px;box-shadow:var(--sh)}
+.card:hover{box-shadow:var(--shl)}
+
+.section-title{font-size:11px;font-weight:700;color:var(--t3);letter-spacing:.08em;margin-bottom:14px;display:flex;align-items:center;gap:6px}
+
+/* KPI cards */
+.kpi-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:4px}
+.kpi{background:var(--w);border-radius:var(--rad);padding:16px;box-shadow:var(--sh);display:flex;flex-direction:column;gap:6px}
+.kpi:hover{box-shadow:var(--shl);transform:translateY(-1px);transition:all .2s}
+.kpi-icon{width:40px;height:40px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:18px}
+.kpi-v{font-family:'Outfit',sans-serif;font-size:26px;font-weight:900;line-height:1}
+.kpi-l{font-size:12px;color:var(--t2);font-weight:600}
+.kpi-s{font-size:10px;font-weight:700;padding:2px 8px;border-radius:99px;display:inline-flex;align-items:center;gap:4px}
+.ok{color:var(--g);background:#d1fae5}.wr{color:var(--a);background:#fef3c7}.er{color:var(--r);background:#fee2e2}.ng{color:var(--t2);background:#f3f4f6}
+
+/* Metrics table */
+.mt{width:100%;border-collapse:collapse;font-size:13px}
+.mt th{font-size:11px;font-weight:700;color:var(--t3);text-align:left;padding:7px 12px;border-bottom:1px solid var(--bd);letter-spacing:.04em}
+.mt td{padding:10px 12px;border-bottom:1px solid var(--bd);font-weight:600}
+.mt tr:last-child td{border-bottom:none}
+.mt tr:hover td{background:#fafafa}
+.mt .val{font-family:'Outfit',sans-serif;font-weight:800;font-size:15px}
+.bar-cell{width:120px}
+.mini-bar{height:6px;background:#f3f4f6;border-radius:99px;overflow:hidden;margin-top:3px}
+.mini-fill{height:100%;border-radius:99px;transition:width .6s ease}
+
+/* Score distribution */
+.dist{display:flex;gap:8px;align-items:flex-end;height:80px}
+.dist-b{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px}
+.dist-bar{flex:1;width:100%;border-radius:5px 5px 0 0;transition:height .7s ease;min-height:4px}
+.dist-l{font-size:10px;font-weight:700;color:var(--t2)}
+.dist-v{font-size:10px;font-weight:800;font-family:'Outfit',sans-serif}
+
+/* Session list */
+.slist{max-height:280px;overflow-y:auto}
+.slist::-webkit-scrollbar{width:3px}.slist::-webkit-scrollbar-thumb{background:#e5e7eb;border-radius:99px}
+.srow{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--bd);font-size:13px}
+.srow:last-child{border-bottom:none}
+.srow .sco{font-family:'Outfit',sans-serif;font-weight:900;font-size:18px;min-width:50px}
+.srow .sl{font-size:11px;color:var(--t2);margin-top:2px}
+.srow .sbar{flex:1;height:4px;background:#f3f4f6;border-radius:99px;overflow:hidden}
+.srow .sbar-fill{height:100%;border-radius:99px;transition:width .8s ease}
+.srow .st{font-size:11px;color:var(--t3);min-width:70px;text-align:right}
+.srow .sai{font-size:10px;font-weight:700;padding:2px 7px;border-radius:99px;background:#ede9fe;color:var(--p)}
+
+/* Hallucination entries */
+.hlist{max-height:240px;overflow-y:auto}
+.hlist::-webkit-scrollbar{width:3px}.hlist::-webkit-scrollbar-thumb{background:#e5e7eb;border-radius:99px}
+.hrow{padding:8px 0;border-bottom:1px solid var(--bd);font-size:12px}
+.hrow:last-child{border-bottom:none}
+.hrow .hq{font-weight:600;color:var(--t);line-height:1.4;margin-bottom:4px}
+.hrow .hr{display:flex;gap:8px;align-items:center}
+.hrow .hr-tag{font-size:10px;font-weight:700;padding:2px 8px;border-radius:99px}
+.hrow .hr-rate{font-weight:700;font-family:'Outfit',sans-serif}
+
+/* Refresh spinner */
+.spin{animation:spin .8s linear infinite;display:inline-block}
+@keyframes spin{to{transform:rotate(360deg)}}
+.refresh-btn{display:flex;align-items:center;gap:6px}
+
+/* Empty state */
+.empty{text-align:center;padding:32px 16px;color:var(--t3);font-size:13px}
+.empty-icon{font-size:36px;margin-bottom:10px}
+
+/* Citation rate donut */
+.circ-wrap{display:flex;align-items:center;gap:20px}
+.circ-svg{position:relative;width:80px;height:80px;flex-shrink:0}
+.circ-svg svg{transform:rotate(-90deg)}
+.circ-bg{fill:none;stroke:#f3f4f6;stroke-width:8}
+.circ-fg{fill:none;stroke-width:8;stroke-linecap:round;transition:stroke-dashoffset .6s ease}
+.circ-txt{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:'Outfit',sans-serif;font-size:14px;font-weight:800}
+.circ-legend{font-size:12px;color:var(--t2);line-height:1.8}
+.circ-legend div{display:flex;gap:6px;align-items:center}
+.circ-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+
+/* Responsive */
+@media(max-width:900px){
+  .main{grid-template-columns:1fr}
+  .kpi-grid{grid-template-columns:repeat(2,1fr)}
+}
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <h1>📊 CobraQ Evaluation Dashboard</h1>
+  <div class="actions">
+    <span class="badge" id="upd">Đang tải...</span>
+    <button class="btn btn-r refresh-btn" onclick="loadData()" id="rbtn">
+      <span id="spin-ico">🔄</span> Làm mới
+    </button>
+  </div>
+</div>
+
+<div class="main">
+  <!-- Left column -->
+  <div class="col">
+
+    <!-- KPIs -->
+    <div class="kpi-grid">
+      <div class="kpi">
+        <div class="kpi-icon" style="background:#ede9fe">🤖</div>
+        <div class="kpi-v" id="k-hall" style="color:var(--r)">—</div>
+        <div class="kpi-l">Hallucination Rate</div>
+        <div class="kpi-s er" id="k-hall-s">Chưa có dữ liệu</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-icon" style="background:#d1fae5">📄</div>
+        <div class="kpi-v" id="k-cite" style="color:var(--g)">—</div>
+        <div class="kpi-l">Citation Rate</div>
+        <div class="kpi-s ok" id="k-cite-s">Chưa có dữ liệu</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-icon" style="background:#fef3c7">📝</div>
+        <div class="kpi-v" id="k-acc" style="color:var(--a)">—</div>
+        <div class="kpi-l">Quiz Accuracy</div>
+        <div class="kpi-s wr" id="k-acc-s">Chưa có dữ liệu</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-icon" style="background:#dbeafe">🎯</div>
+        <div class="kpi-v" id="k-mrr" style="color:var(--p)">—</div>
+        <div class="kpi-l">MRR (Retrieval)</div>
+        <div class="kpi-s ng" id="k-mrr-s">Chưa có dữ liệu</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-icon" style="background:#fce7f3">🚫</div>
+        <div class="kpi-v" id="k-block" style="color:var(--t2)">—</div>
+        <div class="kpi-l">Block Rate</div>
+        <div class="kpi-s ng" id="k-block-s">Chưa có dữ liệu</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-icon" style="background:#fee2e2">📋</div>
+        <div class="kpi-v" id="k-sess" style="color:var(--t)">—</div>
+        <div class="kpi-l">Quiz Sessions</div>
+        <div class="kpi-s ng" id="k-sess-s">Chưa có dữ liệu</div>
+      </div>
+    </div>
+
+    <!-- Retrieval metrics table -->
+    <div class="card">
+      <div class="section-title">📡 RETRIEVAL METRICS</div>
+      <table class="mt" id="t-ret">
+        <thead><tr>
+          <th>Metric</th><th>Value</th><th style="width:140px">Progress (target)</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <!-- Quiz Score Distribution -->
+    <div class="card">
+      <div class="section-title">📈 QUIZ SCORE DISTRIBUTION</div>
+      <div class="dist" id="dist-chart"></div>
+      <div style="margin-top:14px">
+        <table class="mt" id="t-dist">
+          <thead><tr><th>Stat</th><th>Value</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Right column -->
+  <div class="col">
+
+    <!-- Citation rate donut -->
+    <div class="card">
+      <div class="section-title">📄 CITATION COVERAGE</div>
+      <div class="circ-wrap">
+        <div class="circ-svg">
+          <svg viewBox="0 0 80 80" width="80" height="80">
+            <circle class="circ-bg" cx="40" cy="40" r="34"/>
+            <circle class="circ-fg" id="cite-circle" cx="40" cy="40" r="34"
+              stroke="var(--g)" stroke-dasharray="0 213.6" stroke-dashoffset="0"/>
+          </svg>
+          <div class="circ-txt" id="cite-pct">—</div>
+        </div>
+        <div class="circ-legend">
+          <div><div class="circ-dot" style="background:var(--g)"></div><span>Đã trích dẫn</span></div>
+          <div><div class="circ-dot" style="background:#f3f4f6"></div><span>Không trích dẫn</span></div>
+          <div style="margin-top:6px;font-size:11px;color:var(--t3)" id="cite-count"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Recent sessions -->
+    <div class="card">
+      <div class="section-title">📋 QUIZ SESSIONS</div>
+      <div class="slist" id="slist">
+        <div class="empty"><div class="empty-icon">📭</div>Chưa có phiên quiz nào</div>
+      </div>
+    </div>
+
+    <!-- Role performance -->
+    <div class="card">
+      <div class="section-title">👥 PERFORMANCE BY ROLE</div>
+      <table class="mt" id="t-role">
+        <thead><tr><th>Role</th><th>Accuracy</th><th>Answers</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <!-- High hallucination entries -->
+    <div class="card">
+      <div class="section-title">⚠️ HIGH HALLUCINATION</div>
+      <div class="hlist" id="hlist">
+        <div class="empty"><div class="empty-icon">✅</div>Không có entries vi phạm</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+const API = "http://127.0.0.1:8000";
+
+function pct(v) { return (v * 100).toFixed(1) + "%"; }
+function fmt(v) { return typeof v === "number" ? v.toFixed(4) : v; }
+
+function scoreColor(p) {
+  if (p >= 0.8) return "var(--g)";
+  if (p >= 0.6) return "var(--a)";
+  return "var(--r)";
+}
+function barColor(p) {
+  if (p >= 0.8) return "#10b981";
+  if (p >= 0.6) return "#f59e0b";
+  return "#ef4444";
+}
+function statusTag(val, target, inverse) {
+  const ok = inverse ? val < target : val >= target;
+  const cls = ok ? "ok" : val < target + 0.1 ? "wr" : "er";
+  const label = ok ? "✓ Đạt" : val < target + 0.1 ? "◐ Gần đạt" : "✗ Dưới target";
+  return `<span class="kpi-s ${cls}">${label} (target ${pct(target)})</span>`;
+}
+
+async function loadData() {
+  const btn = document.getElementById("rbtn");
+  const spin = document.getElementById("spin-ico");
+  btn.disabled = true;
+  spin.textContent = "⏳"; spin.className = "spin";
+
+  try {
+    const [hallRes, retRes, evalRes] = await Promise.all([
+      fetch(`${API}/evaluation/hallucination`),
+      fetch(`${API}/evaluation/retrieval`),
+      fetch(`${API}/evaluation/metrics`),
+    ]);
+
+    let hall = {}, ret = {}, evl = {};
+    if (hallRes.ok) hall = await hallRes.json();
+    if (retRes.ok) ret = await retRes.json();
+    if (evalRes.ok) evl = await evalRes.json();
+
+    renderKPIs(hall, evl);
+    renderRetrieval(ret);
+    renderDistribution(evl);
+    renderCitation(hall);
+    renderSessions(evl);
+    renderRole(evl);
+    renderHallucination(hall);
+
+    document.getElementById("upd").textContent = `Cập nhật: ${new Date().toLocaleTimeString("vi-VN")}`;
+  } catch(e) {
+    console.error(e);
+  } finally {
+    btn.disabled = false;
+    spin.textContent = "🔄"; spin.className = "";
+  }
+}
+
+function renderKPIs(hall, evl) {
+  // Hallucination
+  const hRate = hall.hallucination_rate || 0;
+  document.getElementById("k-hall").textContent = pct(hRate);
+  document.getElementById("k-hall-s").outerHTML = statusTag(hRate, 0.05, true).replace("class=\"kpi-s ", "id=\"k-hall-s\" class=\"kpi-s ");
+
+  // Citation rate
+  const citeRate = hall.citation_rate || 0;
+  document.getElementById("k-cite").textContent = pct(citeRate);
+  document.getElementById("k-cite-s").outerHTML = statusTag(citeRate, 0.80, false).replace("class=\"kpi-s ", "id=\"k-cite-s\" class=\"kpi-s ");
+
+  // Quiz accuracy
+  const acc = evl.metrics?.quiz_accuracy || 0;
+  document.getElementById("k-acc").textContent = pct(acc);
+  document.getElementById("k-acc-s").outerHTML = statusTag(acc, 0.70, false).replace("class=\"kpi-s ", "id=\"k-acc-s\" class=\"kpi-s ");
+
+  // MRR
+  const mrr = evl.metrics?.mrr || hall.mrr || 0;
+  document.getElementById("k-mrr").textContent = mrr.toFixed(4);
+  document.getElementById("k-mrr-s").outerHTML = statusTag(mrr, 0.70, false).replace("class=\"kpi-s ", "id=\"k-mrr-s\" class=\"kpi-s ");
+
+  // Block rate
+  const block = hall.block_rate || 0;
+  document.getElementById("k-block").textContent = pct(block);
+  document.getElementById("k-block-s").outerHTML = statusTag(block, 0.05, true).replace("class=\"kpi-s ", "id=\"k-block-s\" class=\"kpi-s ");
+
+  // Sessions
+  const sess = (evl.metrics?.total_sessions || 0) + (hall.total_entries || 0);
+  document.getElementById("k-sess").textContent = evl.metrics?.total_sessions || 0;
+  document.getElementById("k-sess-s").textContent = `${hall.total_entries || 0} tutoring + ${evl.metrics?.quiz_count || 0} quiz`;
+}
+
+function renderRetrieval(ret) {
+  const tbody = document.querySelector("#t-ret tbody");
+  const metrics = [
+    { k: "mrr", l: "MRR (Mean Reciprocal Rank)", v: ret.mrr || 0, t: 0.70 },
+    { k: "hit_rate_1", l: "HitRate@1", v: ret.hit_rate_1 || 0, t: 0.50 },
+    { k: "hit_rate_5", l: "HitRate@5", v: ret.hit_rate_5 || 0, t: 0.80 },
+    { k: "precision_1", l: "Precision@1", v: ret.precision_1 || 0, t: 0.40 },
+    { k: "precision_5", l: "Precision@5", v: ret.precision_5 || 0, t: 0.20 },
+    { k: "ndcg_5", l: "NDCG@5", v: ret.ndcg_5 || 0, t: 0.60 },
+    { k: "recall", l: "Recall", v: ret.recall || 0, t: 0.60 },
+  ];
+  tbody.innerHTML = metrics.map(m => {
+    const pct = Math.min((m.v / m.t) * 100, 100);
+    const c = scoreColor(m.v / m.t);
+    return `<tr>
+      <td>${m.l}</td>
+      <td class="val" style="color:${c}">${fmt(m.v)}</td>
+      <td class="bar-cell">
+        <div class="mini-bar"><div class="mini-fill" style="width:${pct}%;background:${c}"></div></div>
+        <div style="font-size:10px;color:var(--t3);margin-top:2px">target: ${fmt(m.t)}</div>
+      </td>
+    </tr>`;
+  }).join("");
+}
+
+function renderDistribution(evl) {
+  const dist = evl.metrics?.score_distribution || {};
+  const buckets = dist.buckets || {};
+  const max = Math.max(...Object.values(buckets), 1);
+  const bucketData = [
+    { l: "0-20%", k: "0-20%", c: "#ef4444" },
+    { l: "20-40%", k: "20-40%", c: "#f97316" },
+    { l: "40-60%", k: "40-60%", c: "#eab308" },
+    { l: "60-80%", k: "60-80%", c: "#22c55e" },
+    { l: "80-100%", k: "80-100%", c: "#10b981" },
+  ];
+  const chartEl = document.getElementById("dist-chart");
+  chartEl.innerHTML = bucketData.map(b => {
+    const count = buckets[b.k] || 0;
+    const h = max > 0 ? Math.max((count / max) * 60, 4) : 4;
+    return `<div class="dist-b">
+      <div class="dist-v">${count}</div>
+      <div class="dist-bar" style="height:${h}px;background:${b.c}"></div>
+      <div class="dist-l">${b.l}</div>
+    </div>`;
+  }).join("");
+
+  const tbody = document.querySelector("#t-dist tbody");
+  tbody.innerHTML = [
+    { l: "Average Score", v: (dist.avg_score || 0).toFixed(1) + "%" },
+    { l: "Median Score", v: (dist.median_score || 0).toFixed(1) + "%" },
+    { l: "Best Score", v: (dist.best_score || 0).toFixed(1) + "%" },
+    { l: "Worst Score", v: (dist.worst_score || 0).toFixed(1) + "%" },
+    { l: "Total Sessions", v: dist.total_sessions || 0 },
+  ].map(r => `<tr><td>${r.l}</td><td class="val" style="color:var(--p)">${r.v}</td></tr>`).join("");
+}
+
+function renderCitation(hall) {
+  const citeRate = hall.citation_rate || 0;
+  const citeCount = hall.citation_diversity?.avg || 0;
+  const circumference = 2 * Math.PI * 34; // ~213.6
+  const offset = circumference * (1 - citeRate);
+  const circle = document.getElementById("cite-circle");
+  circle.setAttribute("stroke-dasharray", `${circumference} ${circumference}`);
+  circle.setAttribute("stroke-dashoffset", offset);
+  circle.setAttribute("stroke", barColor(citeRate));
+  document.getElementById("cite-pct").textContent = pct(citeRate);
+  document.getElementById("cite-count").textContent = `Trung bình ${citeCount.toFixed(1)} citations/query`;
+}
+
+function renderSessions(evl) {
+  const sessions = evl.metrics?.sessions || [];
+  const el = document.getElementById("slist");
+  if (!sessions.length) {
+    el.innerHTML = '<div class="empty"><div class="empty-icon">📭</div>Chưa có phiên quiz nào</div>';
+    return;
+  }
+  el.innerHTML = sessions.slice(0, 15).map(s => {
+    const pct = (s.accuracy * 100).toFixed(0);
+    const c = scoreColor(s.accuracy);
+    const mins = s.time_taken_ms ? Math.round(s.time_taken_ms / 60000) : 0;
+    return `<div class="srow">
+      <div class="sco" style="color:${c}">${pct}%</div>
+      <div>
+        <div class="sl">${s.correct}/${s.total} đúng${s.ai_used?' · 🤖':''}</div>
+        <div class="sbar"><div class="sbar-fill" style="width:${pct}%;background:${c}"></div></div>
+      </div>
+      <div class="st">${mins}ph</div>
+      ${s.ai_used?'<div class="sai">AI</div>':''}
+    </div>`;
+  }).join("");
+}
+
+function renderRole(evl) {
+  const perf = evl.metrics?.role_performance || {};
+  const tbody = document.querySelector("#t-role tbody");
+  const roleLabels = { student: "Sinh viên", teacher: "Giáo viên", admin: "Quản trị", unknown: "Khác" };
+  const rows = Object.entries(perf);
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="3" style="color:var(--t3);text-align:center">Chưa có dữ liệu</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map(([role, data]) => {
+    const p = data.accuracy;
+    const c = scoreColor(p);
+    return `<tr>
+      <td>${roleLabels[role] || role}</td>
+      <td class="val" style="color:${c}">${pct(p)}</td>
+      <td style="color:var(--t2)">${data.correct}/${data.total}</td>
+    </tr>`;
+  }).join("");
+}
+
+function renderHallucination(hall) {
+  const entries = hall.high_hallucination_entries || [];
+  const el = document.getElementById("hlist");
+  if (!entries.length) {
+    el.innerHTML = '<div class="empty"><div class="empty-icon">✅</div>Không có entries vi phạm</div>';
+    return;
+  }
+  el.innerHTML = entries.slice(0, 10).map(e => {
+    const rate = e.hallucination_rate || 0;
+    const c = scoreColor(1 - rate);
+    return `<div class="hrow">
+      <div class="hq">${e.query || '—'}</div>
+      <div class="hr">
+        <span class="hr-tag" style="background:#fee2e2;color:#991b1b">Hall: ${pct(rate)}</span>
+        <span class="hr-rate" style="color:${e.citation_present?'var(--g)':'var(--r)'}">${e.citation_present?'✓ Có citation':'✗ Không citation'}</span>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+loadData();
+setInterval(loadData, 60000);
+</script>
+</body>
+</html>

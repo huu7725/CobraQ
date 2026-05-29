@@ -1,0 +1,30 @@
+# CobraQ Backend
+# Chạy: cd backend && uvicorn app.main:app --reload --port 8000
+
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0
+python-multipart>=0.0.9
+pymupdf>=1.24.0
+python-docx>=1.1.0
+anthropic>=0.25.0
+
+# Bảo mật
+python-jose[cryptography]>=3.3.0
+passlib[bcrypt]>=1.7.4
+pydantic-settings>=2.0.0
+
+# Sanitization
+bleach>=6.1.0
+
+# PDF image conversion (cho Claude Vision)
+pdf2image>=1.17.0
+Pillow>=10.0.0
+
+# Vector DB
+chromadb>=0.5.0
+
+# Token counting (context window)
+tiktoken>=0.7.0
+
+# Rate limiting
+slowapi>=0.1.9
