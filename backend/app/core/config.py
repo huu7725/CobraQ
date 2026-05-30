@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     debug: bool = False
 
     # JWT
-    secret_key: str = "CHANGE_THIS_TO_A_SECURE_RANDOM_KEY_32CHARS"
+    secret_key: str = "cobraq_super_secret_key_change_this_in_production_32chars_minimum"
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 60 * 24  # 24 hours
 
