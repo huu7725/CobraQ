@@ -1,6 +1,14 @@
 fastapi
 uvicorn[standard]
 python-multipart
-pymupdf
-python-docx
-anthropic
+python-dotenv
+python-jose
+passlib
+bcrypt
+pydantic
+pydantic-settings
+email-validator
+slowapi
+httpx
+aiofiles
+asgiref
