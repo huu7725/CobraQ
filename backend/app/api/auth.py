@@ -75,6 +75,29 @@ def register(body: RegisterBody, x_user_id: str = Header(default="")):
 @router.post("/login")
 def login(body: LoginBody, x_user_id: str = Header(default="")):
     user = user_store.get_user(body.email)
+
+    # Fallback: if the JSON store was wiped (e.g. ephemeral disk restart
+    # before persistent disk was attached), look up the SQLite copy that
+    # register() also writes to.
+    if not user:
+        try:
+            from ..db.database import get_db
+            from ..models.user import User as UserModel
+            db = next(get_db())
+            row = db.query(UserModel).filter(UserModel.email == body.email).first()
+            if row:
+                # Re-hydrate the JSON store so subsequent logins are fast
+                # and downstream admin endpoints keep working.
+                user_store.update_user(body.email, {
+                    "email": row.email,
+                    "name": row.name,
+                    "password_hash": row.password_hash,
+                    "role": row.role,
+                })
+                user = user_store.get_user(body.email)
+        except Exception:
+            pass
+
     if not user or not verify_password(body.password, user["password_hash"]):
         audit_log.log(
             EventType.AUTH_FAILED,
