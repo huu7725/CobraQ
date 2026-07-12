@@ -19,6 +19,10 @@ bcrypt<4.1
 pydantic-settings>=2.0.0
 email-validator>=2.1.0  # Required for EmailStr in auth.py (RegisterBody/LoginBody)
 
+# Database (SQLAlchemy + SQLite + Alembic migrations)
+SQLAlchemy>=2.0.0
+alembic>=1.13.0
+
 # Sanitization
 bleach>=6.1.0
 
