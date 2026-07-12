@@ -14,7 +14,7 @@ from pathlib import Path
 
 
 def user_dir(uid):
-    d = Path("D:/CobraQ/backend/data/users") / re.sub(r"[^\w]", "_", uid or "guest")
+    d = Path("data/users") / re.sub(r"[^\w]", "_", uid or "guest")
     d.mkdir(parents=True, exist_ok=True)
     return d
 

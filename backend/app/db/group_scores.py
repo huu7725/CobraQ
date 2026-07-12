@@ -10,7 +10,7 @@ class GroupScores:
     Structure: { group_id: { file_id: { student_email: { session_id, score, percent, time_taken, answers, submitted_at } } } }
     """
 
-    _path = Path("D:/CobraQ/backend/data/group_scores.json")
+    _path = Path("data/group_scores.json")
 
     @classmethod
     def _load(cls) -> dict:

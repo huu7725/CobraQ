@@ -23,6 +23,8 @@ class EventType(str, Enum):
     QUESTION_DELETE = "question.delete"
     TUTORING_QUERY = "tutoring.query"
     CONFIG_UPDATE = "config.update"
+    VIEW_EVENT = "map.view_event"
+    MAP_QUIZ_GENERATE = "map.quiz_generate"
 
 
 class AuditLogger:

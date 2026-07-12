@@ -10,7 +10,7 @@ class GroupStore:
     Teachers create groups, get share codes, students join via codes.
     """
 
-    _path = Path("D:/CobraQ/backend/data/groups.json")
+    _path = Path("data/groups.json")
 
     @classmethod
     def _ensure_dir(cls):

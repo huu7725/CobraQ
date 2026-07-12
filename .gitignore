@@ -1,3 +1,51 @@
-venv2/
+# Python
 venv/
+venv2/
 __pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+*.egg
+
+# Env & secrets (NEVER commit)
+.env
+.env.local
+*.pem
+*.key
+
+# Local data (users, files, audit logs, chroma DB)
+backend/data/
+backend/venv/
+
+# IDE / OS
+.cursor/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Test / debug / scripts (one-off, not part of production)
+test_*.py
+verify_*.py
+debug_*.html
+verify_*.md
+apply_*.py
+server.log
+events.json
+index.html
+data/
+
+# Logs
+*.log
+
+# Misc
+*.tmp
+.cache/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Data test folder
+"data test/"

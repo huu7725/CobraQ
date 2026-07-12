@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<title>CobraQ v4 — Interactive History Map (Test)</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+:root{--bg:#0f172a;--w:#fff;--p:#5b21b6;--p2:#7c3aed;--p3:#ede9fe;--g:#059669;--r:#dc2626;--a:#d97706;--t:#1e1b4b;--t2:#6b7280;--t3:#9ca3af;--bd:#e5e7eb;--sh:0 4px 20px rgba(0,0,0,.08);--rad:14px}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',sans-serif;background:var(--bg);color:var(--t);min-height:100vh}
+header{background:linear-gradient(135deg,#1e1b4b,#5b21b6);color:#fff;padding:18px 24px;display:flex;justify-content:space-between;align-items:center;box-shadow:0 4px 20px rgba(0,0,0,.2)}
+header h1{font-size:22px;font-weight:800}
+header .badge{background:rgba(255,255,255,.15);padding:5px 12px;border-radius:99px;font-size:12px;font-weight:600}
+.layout{display:grid;grid-template-columns:1fr 380px;gap:0;height:calc(100vh - 65px)}
+#map{width:100%;height:100%}
+.sidebar{background:#fff;padding:20px;overflow-y:auto;border-left:1px solid var(--bd)}
+.sidebar h2{font-size:16px;margin-bottom:14px;color:var(--p)}
+.btn{padding:10px 18px;border-radius:10px;border:none;font-weight:700;cursor:pointer;font-size:13px;transition:all .15s;display:inline-flex;align-items:center;gap:7px}
+.btn-primary{background:linear-gradient(135deg,var(--p),var(--p2));color:#fff;width:100%;justify-content:center;margin-top:8px}
+.btn-primary:disabled{opacity:.5;cursor:not-allowed}
+.btn-primary:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 6px 20px rgba(91,33,182,.3)}
+.btn-secondary{background:var(--p3);color:var(--p);border:1.5px solid #c4b5fd}
+.btn-secondary:hover{background:#ddd6fe}
+.progress-box{background:var(--p3);border-radius:12px;padding:14px;margin-bottom:14px;border:1.5px solid #c4b5fd}
+.progress-box .label{font-size:11px;color:var(--t2);font-weight:700;letter-spacing:.05em;margin-bottom:6px}
+.progress-box .count{font-size:24px;font-weight:800;color:var(--p)}
+.viewed-list{display:flex;flex-direction:column;gap:6px;margin-top:10px;max-height:200px;overflow-y:auto}
+.viewed-item{background:#fff;padding:8px 12px;border-radius:8px;font-size:12px;border-left:3px solid var(--p);display:flex;justify-content:space-between;align-items:center}
+.viewed-item .year{color:var(--t3);font-size:10px}
+/* Modal */
+.modal-bg{position:fixed;inset:0;background:rgba(15,23,42,.7);backdrop-filter:blur(6px);z-index:1000;display:none;align-items:center;justify-content:center;padding:20px}
+.modal-bg.on{display:flex}
+.modal{background:#fff;border-radius:20px;width:min(640px,96vw);max-height:90vh;overflow-y:auto;padding:28px;box-shadow:0 30px 80px rgba(0,0,0,.4)}
+.modal h3{font-size:22px;margin-bottom:8px;color:var(--p)}
+.modal .meta{font-size:12px;color:var(--t2);margin-bottom:14px;display:flex;gap:12px;flex-wrap:wrap}
+.modal .meta span{background:var(--p3);padding:3px 10px;border-radius:99px;color:var(--p);font-weight:600}
+.modal .content{font-size:14px;line-height:1.7;margin-bottom:18px;color:#334155;white-space:pre-wrap}
+.modal .video-wrap{margin:14px 0;border-radius:12px;overflow:hidden;background:#000;position:relative;padding-bottom:56.25%;height:0;box-shadow:0 4px 18px rgba(0,0,0,.18)}
+.modal .video-wrap iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
+.modal .video-caption{font-size:11px;color:var(--t3);margin-top:6px;text-align:center;font-style:italic}
+.modal-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:14px}
+/* Quiz config */
+.quiz-config{background:#f8fafc;border-radius:12px;padding:16px;margin-bottom:14px}
+.quiz-config .field{margin-bottom:12px}
+.quiz-config label{font-size:12px;font-weight:700;color:var(--t2);display:block;margin-bottom:6px}
+.quiz-config select{width:100%;padding:9px 12px;border:1.5px solid var(--bd);border-radius:8px;font-size:13px;background:#fff}
+/* Quiz modal */
+.quiz-q{font-size:16px;font-weight:600;margin-bottom:16px;line-height:1.6}
+.quiz-choices{display:flex;flex-direction:column;gap:8px}
+.quiz-choice{padding:12px 16px;border:2px solid var(--bd);border-radius:10px;cursor:pointer;font-size:13px;display:flex;gap:11px;align-items:center;transition:all .15s}
+.quiz-choice:hover{border-color:var(--p);background:var(--p3)}
+.quiz-choice.selected{border-color:var(--p);background:var(--p3);color:var(--p);font-weight:600}
+.quiz-choice.correct{border-color:var(--g);background:#d1fae5;color:#065f46}
+.quiz-choice.wrong{border-color:var(--r);background:#fee2e2;color:#991b1b}
+.quiz-choice .label{width:28px;height:28px;border-radius:8px;background:#f3f4f6;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px;flex-shrink:0}
+.quiz-choice.selected .label{background:var(--p);color:#fff}
+.quiz-progress{height:5px;background:#f3f4f6;border-radius:99px;margin-bottom:18px;overflow:hidden}
+.quiz-progress-fill{height:100%;background:linear-gradient(90deg,var(--p),#a78bfa);transition:width .4s}
+.timer{background:#fef3c7;color:#92400e;padding:6px 12px;border-radius:99px;font-size:12px;font-weight:700;display:inline-block;margin-bottom:12px}
+.toast{position:fixed;bottom:24px;right:24px;padding:14px 22px;border-radius:12px;font-size:13px;font-weight:600;z-index:9999;box-shadow:0 10px 30px rgba(0,0,0,.2);animation:slideIn .3s ease}
+@keyframes slideIn{from{transform:translateX(100%);opacity:0}to{transform:translateX(0);opacity:1}}
+.toast.ok{background:#065f46;color:#fff}
+.toast.err{background:#991b1b;color:#fff}
+.toast.info{background:var(--p);color:#fff}
+.empty{text-align:center;color:var(--t3);font-size:13px;padding:24px 12px}
+/* Map marker labels */
+.event-label{background:rgba(91,33,182,.95);color:#fff;padding:3px 8px;border-radius:99px;font-size:10px;font-weight:700;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.3)}
+.legend{position:absolute;bottom:18px;left:18px;background:rgba(255,255,255,.95);padding:10px 14px;border-radius:10px;font-size:11px;z-index:500;box-shadow:var(--sh)}
+.legend div{display:flex;align-items:center;gap:6px;margin:3px 0}
+.legend .dot{width:14px;height:14px;border-radius:50%}
+.filter-bar{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+.chip{padding:5px 11px;border-radius:99px;font-size:11px;font-weight:700;background:#fff;border:1.5px solid var(--bd);cursor:pointer;color:var(--t2)}
+.chip.active{background:var(--p);color:#fff;border-color:var(--p)}
+.results-box{text-align:center;padding:20px}
+.results-box .score{font-size:54px;font-weight:800;color:var(--p);line-height:1}
+.results-box .meta{color:var(--t2);font-size:14px;margin:8px 0 18px}
+.leaflet-popup-content-wrapper{border-radius:12px}
+.leaflet-popup-content{margin:12px 16px;font-family:'Segoe UI',sans-serif}
+.leaflet-popup-content strong{color:var(--p);display:block;margin-bottom:4px}
+.leaflet-popup-content small{color:var(--t3);font-size:11px}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🐍 CobraQ v4 — Interactive History Learning Platform</h1>
+  <div>
+    <span class="badge" id="userBadge">Đang tải...</span>
+    <button class="btn btn-secondary" onclick="toggleAuth()" style="margin-left:8px" id="authBtn">Đăng nhập</button>
+  </div>
+</header>
+
+<div class="layout">
+  <div style="position:relative">
+    <div id="map"></div>
+    <div class="legend">
+      <strong>Loại sự kiện:</strong>
+      <div><span class="dot" style="background:#dc2626"></span> Trận đánh</div>
+      <div><span class="dot" style="background:#d97706"></span> Triều đại</div>
+      <div><span class="dot" style="background:#059669"></span> Độc lập</div>
+      <div><span class="dot" style="background:#7c3aed"></span> Khởi nghĩa</div>
+      <div><span class="dot" style="background:#0891b2"></span> Di tích</div>
+      <div><span class="dot" style="background:#db2777"></span> Văn hóa</div>
+    </div>
+  </div>
+
+  <aside class="sidebar">
+    <h2>📜 Bản đồ Lịch sử Việt Nam</h2>
+
+    <div class="filter-bar" id="filterBar">
+      <div class="chip active" data-type="all">Tất cả</div>
+      <div class="chip" data-type="battle">Trận đánh</div>
+      <div class="chip" data-type="dynasty">Triều đại</div>
+      <div class="chip" data-type="independence">Độc lập</div>
+      <div class="chip" data-type="rebellion">Khởi nghĩa</div>
+    </div>
+
+    <div class="progress-box">
+      <div class="label">SỰ KIỆN ĐÃ XEM</div>
+      <div class="count" id="viewedCount">0</div>
+      <div class="viewed-list" id="viewedList"></div>
+    </div>
+
+    <div class="quiz-config">
+      <div class="field">
+        <label>Số câu hỏi</label>
+        <select id="numQuestions">
+          <option value="5">5 câu</option>
+          <option value="10" selected>10 câu</option>
+          <option value="15">15 câu</option>
+          <option value="20">20 câu</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Thời gian</label>
+        <select id="timeLimit">
+          <option value="5">5 phút</option>
+          <option value="10">10 phút</option>
+          <option value="15" selected>15 phút</option>
+          <option value="30">30 phút</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Độ khó</label>
+        <select id="difficulty">
+          <option value="1">Dễ</option>
+          <option value="2" selected>Trung bình</option>
+          <option value="3">Khó</option>
+        </select>
+      </div>
+    </div>
+
+    <button class="btn btn-primary" id="quizBtn" disabled onclick="generateQuiz()">
+      🧠 Củng cố kiến thức (cần ≥2 sự kiện)
+    </button>
+  </aside>
+</div>
+
+<!-- Event Detail Modal -->
+<div class="modal-bg" id="eventModal">
+  <div class="modal">
+    <h3 id="emTitle"></h3>
+    <div class="meta" id="emMeta"></div>
+    <div class="content" id="emContent"></div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeEventModal()">Đóng</button>
+    </div>
+  </div>
+</div>
+
+<!-- Auth Modal -->
+<div class="modal-bg" id="authModal">
+  <div class="modal" style="max-width:420px">
+    <h3 id="authTitle">Đăng nhập</h3>
+    <div style="margin-bottom:12px">
+      <input id="authEmail" type="email" placeholder="Email" style="width:100%;padding:10px;border:1.5px solid var(--bd);border-radius:8px;margin-bottom:8px;font-size:13px">
+      <input id="authName" type="text" placeholder="Họ tên (chỉ khi đăng ký)" style="width:100%;padding:10px;border:1.5px solid var(--bd);border-radius:8px;margin-bottom:8px;font-size:13px">
+      <input id="authPass" type="password" placeholder="Mật khẩu (≥6 ký tự)" style="width:100%;padding:10px;border:1.5px solid var(--bd);border-radius:8px;font-size:13px">
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeAuth()">Hủy</button>
+      <button class="btn btn-primary" style="width:auto" onclick="submitAuth()">Xác nhận</button>
+    </div>
+    <p style="text-align:center;margin-top:14px;font-size:12px;color:var(--t2)">
+      <a href="#" onclick="toggleAuthMode()" id="authToggle">Chưa có tài khoản? Đăng ký</a>
+    </p>
+  </div>
+</div>
+
+<!-- Quiz Modal -->
+<div class="modal-bg" id="quizModal">
+  <div class="modal" style="width:min(720px,96vw)">
+    <div id="quizContent"></div>
+  </div>
+</div>
+
+<script>
+const API = "http://127.0.0.1:8000/api";
+let token = localStorage.getItem("cobraq_token");
+let currentUser = null;
+let authMode = "login"; // or "register"
+let map, markersLayer;
+let allEvents = [];
+let viewedEvents = [];
+let currentQuiz = null;
+let currentQ = 0;
+let userAnswers = {};
+let timerInterval = null;
+let timeLeft = 0;
+
+const TYPE_ICONS = {
+  battle: { emoji: "⚔️", color: "#dc2626" },
+  dynasty: { emoji: "👑", color: "#d97706" },
+  independence: { emoji: "🎉", color: "#059669" },
+  rebellion: { emoji: "🔥", color: "#7c3aed" },
+  landmark: { emoji: "🏛️", color: "#0891b2" },
+  culture: { emoji: "📜", color: "#db2777" },
+  figure: { emoji: "👤", color: "#0ea5e9" }
+};
+
+// ── INIT ────────────────────────────────────────────────────────────
+async function init() {
+  initMap();
+  await loadUser();
+  await loadEvents();
+  await loadProgress();
+}
+
+// ── MAP ─────────────────────────────────────────────────────────────
+function initMap() {
+  map = L.map('map').setView([16.0, 108.0], 6);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap',
+    maxZoom: 18
+  }).addTo(map);
+  markersLayer = L.layerGroup().addTo(map);
+}
+
+async function loadEvents(typeFilter = null) {
+  const url = typeFilter && typeFilter !== "all"
+    ? `${API}/map/events?event_type=${typeFilter}`
+    : `${API}/map/events`;
+  const res = await fetch(url);
+  const data = await res.json();
+  allEvents = data.events;
+  renderMarkers(allEvents);
+}
+
+function renderMarkers(events) {
+  markersLayer.clearLayers();
+  events.forEach(ev => {
+    const type = TYPE_ICONS[ev.event_type] || TYPE_ICONS.landmark;
+    const icon = L.divIcon({
+      html: `<div style="font-size:28px;text-shadow:0 2px 8px rgba(0,0,0,.4);filter:drop-shadow(0 0 6px ${type.color}88)">${type.emoji}</div>`,
+      className: 'event-marker',
+      iconSize: [32, 32],
+      iconAnchor: [16, 16]
+    });
+    const m = L.marker([ev.latitude, ev.longitude], { icon })
+      .bindPopup(`
+        <strong>${ev.title}</strong>
+        <small>📅 ${ev.year_range} | 📍 ${ev.region || ''}</small><br>
+        <small>${(ev.short_description || '').substring(0, 90)}...</small><br>
+        ${ev.video_url ? '<small style="color:#7c3aed;font-weight:600">🎬 Có video tư liệu</small><br>' : ''}
+        <a href="#" onclick="openEventDetail('${ev.slug}');return false" style="color:#5b21b6;font-weight:700;font-size:12px">Xem chi tiết →</a>
+      `);
+    markersLayer.addLayer(m);
+  });
+}
+
+// ── FILTER ──────────────────────────────────────────────────────────
+document.getElementById("filterBar").addEventListener("click", e => {
+  if (!e.target.classList.contains("chip")) return;
+  document.querySelectorAll(".chip").forEach(c => c.classList.remove("active"));
+  e.target.classList.add("active");
+  loadEvents(e.target.dataset.type);
+});
+
+// ── EVENT DETAIL ────────────────────────────────────────────────────
+// Backend stores video URLs in the form 'https://www.youtube.com/embed/<videoId>'.
+// YouTube's embed player requires a valid Referer header; this page is served over
+// HTTP by the backend (with 'Referrer-Policy: strict-origin-when-cross-origin')
+// so cross-origin Referer is sent to YouTube and 'Error 153' is avoided.
+function toEmbedUrl(url) {
+  if (!url) return "";
+  // Already an /embed/ URL — pass through but ensure nocookie domain + safe params
+  const nocookie = (u) =>
+    u.replace("https://www.youtube.com/embed/", "https://www.youtube-nocookie.com/embed/")
+     + (u.includes("?") ? "&" : "?")
+     + "rel=0&modestbranding=1&playsinline=1&enablejsapi=1";
+  const m = url.match(/[?&]v=([A-Za-z0-9_-]{6,})/);
+  if (m) return nocookie(`https://www.youtube.com/embed/${m[1]}`);
+  if (url.includes("youtube.com/embed/") || url.includes("youtube-nocookie.com/embed/")) {
+    return nocookie(url);
+  }
+  return url;
+}
+
+async function openEventDetail(slug) {
+  const res = await fetch(`${API}/map/events/${slug}`);
+  const ev = await res.json();
+
+  document.getElementById("emTitle").textContent = ev.title;
+  document.getElementById("emMeta").innerHTML = `
+    <span>📅 ${ev.year_range || 'Không rõ'}</span>
+    <span>📍 ${ev.region || ''}</span>
+    <span>🏛️ ${ev.period || ''}</span>
+  `;
+
+  // Render or replace video iframe (so old video gets removed on re-open)
+  const existingVideo = document.getElementById("emVideoWrap");
+  if (existingVideo) existingVideo.remove();
+  if (ev.video_url) {
+    const embed = toEmbedUrl(ev.video_url);
+    const wrap = document.createElement("div");
+    wrap.id = "emVideoWrap";
+    wrap.className = "video-wrap";
+    wrap.innerHTML = `<iframe src="${embed}" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen referrerpolicy="strict-origin-when-cross-origin" loading="lazy" title="Video tư liệu lịch sử"></iframe>`;
+    const cap = document.createElement("div");
+    cap.className = "video-caption";
+    cap.textContent = "🎬 Video tư liệu lịch sử";
+    const modal = document.querySelector("#eventModal .modal");
+    modal.insertBefore(wrap, document.getElementById("emContent"));
+    modal.insertBefore(cap, document.getElementById("emContent"));
+  }
+
+  document.getElementById("emContent").textContent = ev.full_content;
+  document.getElementById("eventModal").classList.add("on");
+
+  // Track view if logged in
+  if (token) {
+    await fetch(`${API}/map/events/${slug}/view`, {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ session_id: "test-session" })
+    });
+    await loadProgress();
+  }
+}
+
+function closeEventModal() {
+  document.getElementById("eventModal").classList.remove("on");
+  // Stop video playback when modal closes
+  const wrap = document.getElementById("emVideoWrap");
+  if (wrap) {
+    const iframe = wrap.querySelector("iframe");
+    if (iframe) iframe.src = iframe.src; // reload to stop playback
+  }
+}
+
+// ── AUTH ────────────────────────────────────────────────────────────
+async function loadUser() {
+  if (!token) {
+    document.getElementById("userBadge").textContent = "👤 Khách";
+    return;
+  }
+  try {
+    const res = await fetch(`${API}/auth/me`, {
+      headers: { "Authorization": `Bearer ${token}` }
+    });
+    const data = await res.json();
+    if (data.email) {
+      currentUser = data;
+      document.getElementById("userBadge").textContent = `✅ ${data.name}`;
+      document.getElementById("authBtn").textContent = "Đăng xuất";
+    }
+  } catch (e) {
+    token = null;
+    localStorage.removeItem("cobraq_token");
+  }
+}
+
+function toggleAuth() {
+  if (token) {
+    token = null;
+    localStorage.removeItem("cobraq_token");
+    currentUser = null;
+    document.getElementById("userBadge").textContent = "👤 Khách";
+    document.getElementById("authBtn").textContent = "Đăng nhập";
+    loadProgress();
+    toast("Đã đăng xuất", "info");
+  } else {
+    document.getElementById("authModal").classList.add("on");
+  }
+}
+
+function toggleAuthMode() {
+  authMode = authMode === "login" ? "register" : "login";
+  document.getElementById("authTitle").textContent = authMode === "login" ? "Đăng nhập" : "Đăng ký";
+  document.getElementById("authToggle").textContent = authMode === "login"
+    ? "Chưa có tài khoản? Đăng ký"
+    : "Đã có tài khoản? Đăng nhập";
+  document.getElementById("authName").style.display = authMode === "login" ? "none" : "block";
+}
+
+async function submitAuth() {
+  const email = document.getElementById("authEmail").value.trim();
+  const name = document.getElementById("authName").value.trim();
+  const password = document.getElementById("authPass").value;
+
+  if (!email || !password || (authMode === "register" && !name)) {
+    return toast("Vui lòng điền đầy đủ", "err");
+  }
+
+  const endpoint = authMode === "login" ? "login" : "register";
+  const body = authMode === "login"
+    ? { email, password }
+    : { email, name, password, role: "student" };
+
+  try {
+    const res = await fetch(`${API}/auth/${endpoint}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || "Lỗi xác thực");
+
+    token = data.access_token;
+    localStorage.setItem("cobraq_token", token);
+    currentUser = data.user;
+    document.getElementById("userBadge").textContent = `✅ ${data.user.name}`;
+    document.getElementById("authBtn").textContent = "Đăng xuất";
+    closeAuth();
+    toast(`Chào ${data.user.name}!`, "ok");
+    await loadProgress();
+  } catch (e) {
+    toast(e.message, "err");
+  }
+}
+
+function closeAuth() {
+  document.getElementById("authModal").classList.remove("on");
+}
+
+// ── PROGRESS ────────────────────────────────────────────────────────
+async function loadProgress() {
+  if (!token) {
+    viewedEvents = [];
+    renderProgress();
+    return;
+  }
+  const res = await fetch(`${API}/map/progress/me`, {
+    headers: { "Authorization": `Bearer ${token}` }
+  });
+  const data = await res.json();
+  viewedEvents = data.viewed_events || [];
+  renderProgress();
+}
+
+function renderProgress() {
+  document.getElementById("viewedCount").textContent = viewedEvents.length;
+  const list = document.getElementById("viewedList");
+  if (viewedEvents.length === 0) {
+    list.innerHTML = '<div class="empty">Click vào marker trên bản đồ để xem chi tiết và bắt đầu học</div>';
+  } else {
+    list.innerHTML = viewedEvents.slice(0, 8).map(v => `
+      <div class="viewed-item">
+        <span>${v.title}</span>
+        <span class="year">${v.year_range || ''}</span>
+      </div>
+    `).join("");
+  }
+  const btn = document.getElementById("quizBtn");
+  btn.disabled = viewedEvents.length < 2;
+  btn.textContent = viewedEvents.length < 2
+    ? `🧠 Củng cố kiến thức (cần ≥2 sự kiện — đã xem ${viewedEvents.length})`
+    : `🧠 Củng cố kiến thức (${viewedEvents.length} sự kiện)`;
+}
+
+// ── QUIZ GENERATION ─────────────────────────────────────────────────
+async function generateQuiz() {
+  if (viewedEvents.length < 2) return toast("Cần xem ít nhất 2 sự kiện", "err");
+
+  const numQ = parseInt(document.getElementById("numQuestions").value);
+  const time = parseInt(document.getElementById("timeLimit").value);
+  const diff = parseInt(document.getElementById("difficulty").value);
+
+  toast("🤖 AI đang tạo câu hỏi...", "info");
+
+  try {
+    const res = await fetch(`${API}/map/quiz/generate`, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${token}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        event_ids: viewedEvents.map(v => v.event_id),
+        num_questions: numQ,
+        time_limit_minutes: time,
+        difficulty: diff
+      })
+    });
+
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || "Lỗi tạo quiz");
+
+    currentQuiz = data;
+    currentQ = 0;
+    userAnswers = {};
+    timeLeft = (data.time_limit_minutes || 15) * 60;
+    document.getElementById("quizModal").classList.add("on");
+    renderQuestion();
+    startTimer();
+  } catch (e) {
+    toast("Lỗi: " + e.message, "err");
+  }
+}
+
+function startTimer() {
+  clearInterval(timerInterval);
+  timerInterval = setInterval(() => {
+    timeLeft--;
+    const t = document.getElementById("timer");
+    if (t) t.textContent = `⏱️ ${Math.floor(timeLeft/60)}:${String(timeLeft%60).padStart(2,'0')}`;
+    if (timeLeft <= 0) {
+      clearInterval(timerInterval);
+      submitQuiz();
+    }
+  }, 1000);
+}
+
+function renderQuestion() {
+  const q = currentQuiz.questions[currentQ];
+  const content = document.getElementById("quizContent");
+  content.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <span class="timer" id="timer">⏱️ ${Math.floor(timeLeft/60)}:${String(timeLeft%60).padStart(2,'0')}</span>
+      <span style="font-size:12px;color:var(--t3)">Câu ${currentQ+1}/${currentQuiz.questions.length}</span>
+    </div>
+    <div class="quiz-progress"><div class="quiz-progress-fill" style="width:${(currentQ/currentQuiz.questions.length)*100}%"></div></div>
+    <div class="quiz-q">${q.question_text}</div>
+    <div class="quiz-choices">
+      ${q.choices.map(c => `
+        <div class="quiz-choice" data-label="${c.label}" onclick="selectChoice('${c.label}', this)">
+          <span class="label">${c.label}</span>
+          <span>${c.text}</span>
+        </div>
+      `).join("")}
+    </div>
+    <div class="modal-actions" style="margin-top:20px">
+      <button class="btn btn-secondary" onclick="closeQuiz()">Thoát</button>
+      <button class="btn btn-primary" style="width:auto" onclick="nextQuestion()" id="nextBtn" ${!userAnswers[q.id]?'disabled':''}>
+        ${currentQ === currentQuiz.questions.length - 1 ? 'Nộp bài' : 'Câu tiếp →'}
+      </button>
+    </div>
+  `;
+}
+
+function selectChoice(label, el) {
+  const q = currentQuiz.questions[currentQ];
+  userAnswers[q.id] = label;
+  document.querySelectorAll(".quiz-choice").forEach(c => c.classList.remove("selected"));
+  el.classList.add("selected");
+  document.getElementById("nextBtn").disabled = false;
+}
+
+function nextQuestion() {
+  if (currentQ === currentQuiz.questions.length - 1) {
+    submitQuiz();
+  } else {
+    currentQ++;
+    renderQuestion();
+  }
+}
+
+async function submitQuiz() {
+  clearInterval(timerInterval);
+  const timeTaken = (currentQuiz.time_limit_minutes * 60) - timeLeft;
+  try {
+    const res = await fetch(`${API}/map/quiz/${currentQuiz.session_token}/submit`, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${token}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        answers: userAnswers,
+        time_taken_seconds: timeTaken
+      })
+    });
+    const data = await res.json();
+    showResults(data);
+  } catch (e) {
+    toast("Lỗi nộp bài: " + e.message, "err");
+  }
+}
+
+function showResults(data) {
+  const content = document.getElementById("quizContent");
+  content.innerHTML = `
+    <div class="results-box">
+      <div class="score">${data.score}/${data.total}</div>
+      <div class="meta">${data.percentage}% chính xác</div>
+      <p style="margin:18px 0;color:var(--t2)">${data.score >= data.total*0.8 ? '🎉 Xuất sắc!' : data.score >= data.total*0.5 ? '👍 Khá tốt!' : '📚 Cần ôn tập thêm'}</p>
+    </div>
+    <div style="margin-top:18px;max-height:400px;overflow-y:auto">
+      ${data.results.map((r, i) => `
+        <div class="di ${r.is_correct ? 'ok' : 'bad'}">
+          <div class="diq">
+            <span class="tag ${r.is_correct ? 'ok' : 'bad'}">${i+1}</span>
+            <span>${r.question_text}</span>
+          </div>
+          <div class="dia">Bạn chọn: <strong>${r.user_answer || '—'}</strong> | Đáp án: <strong style="color:var(--g)">${r.correct_answer}</strong></div>
+          ${r.explanation ? `<div class="dia" style="margin-top:4px;font-style:italic">💡 ${r.explanation}</div>` : ''}
+        </div>
+      `).join("")}
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" style="width:auto" onclick="closeQuiz()">Đóng</button>
+    </div>
+  `;
+}
+
+function closeQuiz() {
+  clearInterval(timerInterval);
+  document.getElementById("quizModal").classList.remove("on");
+}
+
+// ── TOAST ───────────────────────────────────────────────────────────
+function toast(msg, type = "info") {
+  const t = document.createElement("div");
+  t.className = `toast ${type}`;
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 3500);
+}
+
+init();
+</script>
+
+</body>
+</html>

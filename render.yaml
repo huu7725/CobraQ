@@ -1,0 +1,33 @@
+services:
+  # CobraQ Backend API + Static Frontend (served by FastAPI)
+  - type: web
+    name: cobraq
+    runtime: docker
+    plan: free  # Free tier: 512MB RAM, 0.1 CPU. Có thể upgrade lên 'starter' ($7/mo) nếu cần tốc độ.
+    region: oregon  # Hoặc singapore (gần VN hơn), frankfurt, ohio
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    autoDeploy: true  # Tự động deploy khi push lên GitHub
+
+    # Env vars (set trong dashboard Render → Environment, không commit secret!)
+    envVars:
+      - key: PYTHONUNBUFFERED
+        value: "1"
+      - key: DATA_DIR
+        value: /app/data
+      - key: PORT
+        value: "10000"  # Render mặc định là 10000 (overwrite Dockerfile port)
+      - key: DEBUG
+        value: "false"
+      - key: ACCESS_TOKEN_EXPIRE_MINUTES
+        value: "1440"
+      # 🔐 Secrets — đặt trong Render Dashboard, KHÔNG commit:
+      # - ANTHROPIC_API_KEY
+      # - SECRET_KEY
+
+    # Persistent disk (chỉ áp dụng cho paid plan; free không có)
+    # disk:
+    #   name: cobraq-data
+    #   mountPath: /app/data
+    #   sizeGB: 1

@@ -11,6 +11,7 @@ anthropic>=0.25.0
 # Bảo mật
 python-jose[cryptography]>=3.3.0
 passlib[bcrypt]>=1.7.4
+bcrypt<4.1
 pydantic-settings>=2.0.0
 
 # Sanitization

@@ -6,18 +6,20 @@ from pathlib import Path
 from pathlib import Path
 import os
 
-# Absolute path — avoid Path.resolve() case issues on Windows
-_DATA_ROOT = Path("D:/CobraQ/backend/data")
+# Resolve data directory relative to this file (works from any CWD / any drive).
+# router.py lives at <repo>/backend/app/api/router.py → data dir is <repo>/backend/data.
+_BACKEND_ROOT = Path(__file__).resolve().parents[2]
+_DATA_ROOT = _BACKEND_ROOT / "data"
 USERS_DIR = _DATA_ROOT / "users"
 from .auth import router as auth_router
 from .quiz import router as quiz_router
 from .files import router as files_router
 from .config import router as config_router
-from .tutoring import router as tutoring_router
 from .evaluation import router as evaluation_router
 from .users import router as users_router
 from .admin import router as admin_router
 from .groups import router as groups_router
+from .map import router as map_router
 
 api_router = APIRouter()
 
@@ -25,11 +27,11 @@ api_router.include_router(auth_router)
 api_router.include_router(quiz_router)
 api_router.include_router(files_router)
 api_router.include_router(config_router)
-api_router.include_router(tutoring_router)
 api_router.include_router(evaluation_router)
 api_router.include_router(users_router)
 api_router.include_router(admin_router)
 api_router.include_router(groups_router)
+api_router.include_router(map_router)
 
 
 # ── Stats endpoint (ghép từ main_updated.py) ──

@@ -735,3 +735,167 @@ def add_question(
                       "added_by": current_user.get("sub") if current_user else "guest",
                   })
     return {"message": "Đã thêm câu hỏi", "question": new_q}
+
+
+# ── AI Fill Answer ─────────────────────────────────────────────
+class AIFillBody(BaseModel):
+    question: str
+    choices: list = []  # [{label, text}] — user-typed partial choices (optional)
+    file_name: str = ""
+    difficulty: int = 2  # 1=Dễ, 2=TB, 3=Khó
+
+
+@router.post("/ai/fill-answer")
+def ai_fill_answer(
+    body: AIFillBody,
+    current_user: Optional[dict] = Depends(get_current_user_optional),
+):
+    """
+    Gọi AI để sinh đáp án đúng + các lựa chọn nhiễu cho 1 câu hỏi.
+    - Input: câu hỏi + (optional) một vài lựa chọn user đã gõ sẵn.
+    - Output: {correct_answer, choices[4], explanation, source}
+    """
+    from ..core.config import get_settings
+
+    if not (current_user or {}).get("sub"):
+        raise HTTPException(401, "Vui lòng đăng nhập để dùng AI Fill")
+
+    if not body.question or len(body.question.strip()) < 5:
+        raise HTTPException(400, "Câu hỏi quá ngắn (cần ≥ 5 ký tự)")
+
+    # Validate difficulty
+    if body.difficulty not in (1, 2, 3):
+        body.difficulty = 2
+
+    # Normalize user-provided choices: filter non-empty, only keep text
+    user_choices = []
+    for c in (body.choices or []):
+        if isinstance(c, dict):
+            txt = (c.get("text") or "").strip()
+            lbl = (c.get("label") or "").strip().upper()
+            if txt:
+                user_choices.append({"label": lbl or "", "text": txt})
+        elif isinstance(c, str):
+            txt = c.strip()
+            if txt:
+                user_choices.append({"label": "", "text": txt})
+    # Keep only first 4 user choices (preserve labels if present)
+    user_choices = user_choices[:4]
+
+    diff_text = {1: "Dễ", 2: "Trung bình", 3: "Khó"}[body.difficulty]
+
+    user_ctx = ""
+    if user_choices:
+        labels = "ABCDEFGH"[:len(user_choices)]
+        ctx_lines = []
+        for i, c in enumerate(user_choices):
+            lbl = c.get("label") or labels[i]
+            ctx_lines.append(f"- {lbl}: {c['text']}")
+        user_ctx = "\n\nLỰA CHỌN NGƯỜI DÙNG ĐÃ NHẬP (giữ nguyên nếu hợp lý):\n" + "\n".join(ctx_lines)
+
+    prompt = f"""Bạn là giáo viên Lịch sử Việt Nam chuyên nghiệp, có 15 năm kinh nghiệm.
+
+NHIỆM VỤ: Sinh đáp án đúng + các lựa chọn nhiễu cho câu hỏi trắc nghiệm dưới đây.
+
+CÂU HỎI: {body.question.strip()}
+{f"FILE/NGỮ CẢNH: {body.file_name}" if body.file_name else ""}
+ĐỘ KHÓ: {diff_text} (level {body.difficulty}/3)
+{user_ctx}
+
+QUY TẮC:
+1. Trả về đúng 4 lựa chọn A/B/C/D, chỉ 1 đáp án đúng.
+2. Nếu người dùng đã nhập sẵn lựa chọn → ƯU TIÊN GIỮ NGUYÊN nếu đúng. Chỉ thêm/sửa nếu cần để đủ 4 đáp án và đảm bảo chính xác.
+3. Đáp án nhiễu phải hợp lý (kiểu người nhầm lẫn), không phải sai hoàn toàn vô lý.
+4. Cung cấp giải thích ngắn (1-2 câu) tại sao đáp án đúng.
+5. Tiếng Việt, ngắn gọn, chính xác.
+6. Nếu câu hỏi mơ hồ/kiến thức chung → vẫn cố gắng trả lời, không từ chối.
+
+FORMAT OUTPUT (JSON thuần, không markdown, không giải thích gì thêm):
+{{
+  "correct_answer": "A",
+  "choices": [
+    {{"label": "A", "text": "..."}},
+    {{"label": "B", "text": "..."}},
+    {{"label": "C", "text": "..."}},
+    {{"label": "D", "text": "..."}}
+  ],
+  "explanation": "..."
+}}"""
+
+    settings = get_settings()
+    ai_error = None
+    result = None
+    ai_model = "fallback"
+    latency_ms = 0
+
+    if settings.anthropic_api_key and settings.anthropic_api_key != "YOUR_KEY_HERE":
+        try:
+            import anthropic
+            import time as _t
+            client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+            t0 = _t.time()
+            response = client.messages.create(
+                model="claude-sonnet-4-20250514",
+                max_tokens=1024,
+                temperature=0.5,
+                system="Bạn là giáo viên Lịch sử Việt Nam. Luôn trả lời bằng JSON hợp lệ.",
+                messages=[{"role": "user", "content": prompt}],
+            )
+            latency_ms = int((_t.time() - t0) * 1000)
+            txt = response.content[0].text.strip()
+            # Strip markdown code fences if any
+            if txt.startswith("```"):
+                lines = txt.split("\n")
+                txt = "\n".join(lines[1:-1] if lines[-1].strip() == "```" else lines[1:])
+                if txt.startswith("json"):
+                    txt = txt[4:].strip()
+            data = json.loads(txt)
+            result = {
+                "correct_answer": (data.get("correct_answer") or "A").upper()[:1],
+                "choices": data.get("choices") or [],
+                "explanation": data.get("explanation") or "",
+            }
+            ai_model = "claude-sonnet-4-20250514"
+        except json.JSONDecodeError as e:
+            ai_error = f"AI trả về JSON không hợp lệ: {e}"
+        except Exception as e:
+            ai_error = f"Lỗi gọi AI: {e}"
+
+    # Fallback if AI fails or no key: build from user_choices + dummy distractors
+    if not result:
+        labels = ["A", "B", "C", "D"]
+        choices = []
+        for i, c in enumerate(user_choices[:4]):
+            choices.append({"label": labels[i], "text": c["text"]})
+        while len(choices) < 4:
+            choices.append({"label": labels[len(choices)], "text": f"(Đáp án {labels[len(choices)]} - cần AI để điền)"})
+        # Pick first non-empty as correct_answer
+        correct = "A"
+        result = {
+            "correct_answer": correct,
+            "choices": choices,
+            "explanation": "AI chưa khả dụng — vui lòng tự chọn đáp án đúng.",
+        }
+        if not ai_error:
+            ai_error = "Chưa cấu hình API key"
+
+    # Validate: ensure 4 choices & correct_answer is in A-D
+    chs = result.get("choices") or []
+    if len(chs) < 4:
+        labels = ["A", "B", "C", "D"]
+        existing_labels = {c.get("label") for c in chs if c.get("label")}
+        for i, lbl in enumerate(labels):
+            if lbl not in existing_labels and len(chs) < 4:
+                chs.append({"label": lbl, "text": f"(Đáp án {lbl})"})
+    result["choices"] = chs[:4]
+    corr = (result.get("correct_answer") or "A").upper()[:1]
+    if corr not in "ABCD":
+        corr = "A"
+    result["correct_answer"] = corr
+
+    return {
+        "result": result,
+        "ai_model": ai_model,
+        "latency_ms": latency_ms,
+        "ai_error": ai_error,
+    }

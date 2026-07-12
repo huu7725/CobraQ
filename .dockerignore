@@ -1,0 +1,43 @@
+# Exclude khỏi Docker build context
+.git
+.gitignore
+.venv
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+
+# Data local (sẽ mount/seed riêng)
+backend/data/
+backend/venv/
+backend/.env
+backend/.env.local
+
+# IDE / OS
+.cursor/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Test files
+test_*.py
+_test_*.py
+_test_*.js
+verify_*.py
+*.md
+!README.md
+
+# Local scripts
+*.log
+*.tmp
+node_modules/
+
+# Cache
+.cache/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/

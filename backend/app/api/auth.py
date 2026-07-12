@@ -35,6 +35,23 @@ def register(body: RegisterBody, x_user_id: str = Header(default="")):
     pw_hash = hash_password(body.password)
     user = user_store.create_user(body.email, body.name, pw_hash, role)
 
+    # Also persist to SQLite so foreign keys from map progress work
+    try:
+        from ..db.database import get_db
+        from ..models.user import User as UserModel
+        db = next(get_db())
+        if not db.query(UserModel).filter(UserModel.email == body.email).first():
+            db.add(UserModel(
+                email=body.email,
+                name=body.name,
+                password_hash=pw_hash,
+                role=role,
+            ))
+            db.commit()
+    except Exception as e:
+        # Non-fatal: still allow legacy JSON store to work
+        pass
+
     audit_log.log(
         EventType.AUTH_REGISTER,
         user_id=body.email,
@@ -64,6 +81,28 @@ def login(body: LoginBody, x_user_id: str = Header(default="")):
             details={"reason": "invalid_credentials"},
         )
         raise HTTPException(401, "Email hoặc mật khẩu không đúng")
+
+    # Lazy-create user in SQLite on login (so legacy accounts still work)
+    try:
+        from ..db.database import get_db
+        from ..models.user import User as UserModel
+        from datetime import datetime
+        db = next(get_db())
+        if not db.query(UserModel).filter(UserModel.email == body.email).first():
+            db.add(UserModel(
+                email=user["email"],
+                name=user["name"],
+                password_hash=user["password_hash"],
+                role=user["role"],
+            ))
+            db.commit()
+        else:
+            # update last_login
+            row = db.query(UserModel).filter(UserModel.email == body.email).first()
+            row.last_login = datetime.utcnow()
+            db.commit()
+    except Exception:
+        pass
 
     audit_log.log(
         EventType.AUTH_LOGIN,
