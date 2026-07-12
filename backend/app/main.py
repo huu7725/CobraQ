@@ -1,4 +1,5 @@
 import os
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
@@ -59,6 +60,7 @@ app = FastAPI(
     title="CobraQ API",
     description="Hệ thống ôn tập thông minh — FastAPI backend",
     version="3.0.0",
+    lifespan=lifespan,
 )
 
 app.state.limiter = limiter
@@ -72,6 +74,27 @@ app.add_middleware(
 )
 
 app.include_router(api_router, prefix="/api")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Startup: create SQLite tables + seed historical events (idempotent)."""
+    try:
+        from .db.database import Base, engine, SessionLocal
+        # Import all models so SQLAlchemy registers them on Base.metadata
+        from .models import historical_event, map_quiz_question, map_quiz_session, map_quiz_answer, user_map_progress, user, quiz_history  # noqa: F401
+        Base.metadata.create_all(bind=engine)
+        print("[startup] SQLite tables ensured", flush=True)
+    except Exception as e:
+        print(f"[startup] init_db failed: {e}", flush=True)
+
+    try:
+        from .services.seed_map_data import seed_events
+        seed_events()
+    except Exception as e:
+        print(f"[startup] seed_events failed: {e}", flush=True)
+
+    yield
 
 
 @app.get("/")

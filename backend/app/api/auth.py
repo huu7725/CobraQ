@@ -30,7 +30,8 @@ def register(body: RegisterBody, x_user_id: str = Header(default="")):
     if user_store.user_exists(body.email):
         raise HTTPException(400, "Email đã được đăng ký")
 
-    role = body.role if body.role == "student" else "student"
+    # Allow student / teacher / admin. Empty or unknown role falls back to student.
+    role = body.role if body.role in ("student", "teacher", "admin") else "student"
 
     pw_hash = hash_password(body.password)
     user = user_store.create_user(body.email, body.name, pw_hash, role)
