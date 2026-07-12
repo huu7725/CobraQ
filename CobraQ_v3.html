@@ -259,11 +259,6 @@ body{background:var(--bg);overflow:hidden}
 .fc-btn.go{background:var(--p);color:#fff}.fc-btn.go:hover{background:var(--pd)}
 .fc-btn.ai-btn{background:#ede9fe;color:var(--p);border:1px solid #c4b5fd}
 .fc-btn.dl{background:#fee2e2;color:var(--r);border:1px solid #fecaca}.fc-btn.dl:hover{background:#fecaca}
-.ai-banner{background:linear-gradient(135deg,#1e1b4b,#312e81);border-radius:14px;padding:18px 22px;margin-bottom:16px;display:flex;align-items:center;gap:16px;position:relative;overflow:hidden}
-.ai-banner::before{content:'';position:absolute;width:200px;height:200px;border-radius:50%;background:rgba(129,140,248,.1);top:-80px;right:-60px}
-.ai-badge{padding:4px 12px;border-radius:99px;font-size:11px;font-weight:700;flex-shrink:0;cursor:pointer}
-.ai-badge.on{background:rgba(16,185,129,.2);color:#34d399;border:1px solid rgba(16,185,129,.3)}
-.ai-badge.off{background:rgba(156,163,175,.15);color:#9ca3af;border:1px solid rgba(156,163,175,.2)}
 .dz{border:2px dashed #c4b5fd;border-radius:var(--rad);padding:38px 22px;text-align:center;cursor:pointer;transition:all .2s;background:#fdf8ff}
 .dz:hover,.dz.drag{border-color:var(--p);background:var(--p3)}.dz.drag{transform:scale(1.01)}
 .fitem{background:#fff;border:1px solid var(--bd);border-radius:12px;padding:14px 16px;margin-bottom:8px;box-shadow:var(--sh)}
@@ -348,11 +343,6 @@ body{background:var(--bg);overflow:hidden}
 .fsel-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:18px}
 .fp{padding:6px 13px;border-radius:99px;font-size:12px;font-weight:700;cursor:pointer;border:1.5px solid var(--bd);background:#fff;color:var(--t2);transition:all .15s}
 .fp:hover{border-color:var(--p);color:var(--p)}.fp.on{background:var(--p);border-color:var(--p);color:#fff}
-/* AI STATUS MODAL */
-.ai-status-box{border-radius:14px;padding:20px;text-align:center;margin-bottom:18px}
-.ai-status-box.ready{background:#d1fae5;border:1px solid #a7f3d0}
-.ai-status-box.notready{background:#fee2e2;border:1px solid #fecaca}
-.ai-status-box.loading{background:#f3f4f6}
 /* ── PREVIEW / EDIT MODAL ── */
 .qpm{position:fixed;inset:0;z-index:180;background:rgba(30,27,75,.55);backdrop-filter:blur(4px);display:none;align-items:center;justify-content:center;padding:16px}
 .qpm.on{display:flex}
@@ -626,28 +616,6 @@ body{background:var(--bg);overflow:hidden}
     <div style="display:flex;gap:10px">
       <button class="bo" style="flex:1" onclick="cm('qwm')">Hủy</button>
       <button id="qwm-go" style="flex:1;padding:11px;font-size:14px;font-weight:700;background:var(--r);color:#fff;border:none;border-radius:12px;cursor:pointer" onclick="qwmConfirm()">Thoát</button>
-    </div>
-  </div>
-</div>
-
-<!-- AI Status Modal - CHỈ HIỆN TRẠNG THÁI, không có ô nhập key -->
-<div class="mov" id="aim" onclick="if(event.target===this)cm('aim')">
-  <div class="mo" style="max-width:360px">
-    <div style="font-size:40px;text-align:center;margin-bottom:10px">🤖</div>
-    <div style="font-size:17px;font-weight:800;text-align:center;margin-bottom:4px">Claude AI Vision</div>
-    <div style="font-size:13px;color:var(--t3);text-align:center;margin-bottom:20px">Đọc đề bảng có ô tô màu tự động</div>
-    <div class="ai-status-box loading" id="ai-sbox">
-      <div style="font-size:28px;margin-bottom:8px" id="ai-sicon">⏳</div>
-      <div style="font-size:14px;font-weight:700" id="ai-stitle">Đang kiểm tra...</div>
-      <div style="font-size:12px;margin-top:5px;color:var(--t2)" id="ai-ssub"></div>
-    </div>
-    <div style="display:flex;align-items:center;justify-content:space-between;padding:14px;background:var(--bg);border-radius:11px;margin-bottom:16px">
-      <div><div style="font-size:13px;font-weight:600">Tự động dùng AI</div><div style="font-size:11px;color:var(--t3)">Khi đáp án &lt; 30%</div></div>
-      <div class="tgg" id="tg-ai" onclick="tgAI()"></div>
-    </div>
-    <div style="display:flex;gap:9px">
-      <button class="bp" style="flex:1" onclick="saveAI()">Lưu</button>
-      <button class="bo" onclick="cm('aim')">Đóng</button>
     </div>
   </div>
 </div>
@@ -1403,7 +1371,6 @@ function rd(m){
   <div class="sr stg">
     <div class="sc" onclick="nv('quiz-start')"><div class="sic ip">📚</div><div><div class="sn2" style="color:var(--p)">${s.total_questions}</div><div class="sl2">Câu hỏi</div><div class="str2 su">▲ Ngân hàng</div></div></div>
     <div class="sc" onclick="nv('history')"><div class="sic ig">✅</div><div><div class="sn2" style="color:var(--g)">${s.total_sessions}</div><div class="sl2">Lần thi</div><div class="str2 su">${s.avg_score}% TB</div></div></div>
-    <div class="sc" onclick="openAI()"><div class="sic" style="background:${s.ai_available?'#d1fae5':'#f3f4f6'}">${s.ai_available?'🤖':'⚙️'}</div><div><div class="sn2" style="font-size:14px;font-weight:700;color:${s.ai_available?'var(--g)':'var(--t3)'}">${s.ai_available?'AI Bật':'AI Tắt'}</div><div class="sl2">Vision AI</div></div></div>
   </div>
   <div class="dg stg">
     <div class="card c2"><div class="ch2"><div><div class="ct">KẾT QUẢ 7 NGÀY</div><div style="font-size:12px;color:var(--t3)">Số câu đúng mỗi buổi</div></div><span class="cbg" style="background:#ede9fe;color:var(--p)">${S.hist.length} lần</span></div><div class="ch3" id="bch">${bars}</div></div>
@@ -1507,7 +1474,6 @@ function rup(m){
   const s=S.stats,files=s.files||[];
   const fcards=files.length>0?`<div style="margin-top:18px"><div class="ct" style="margin-bottom:14px">CÁC ĐỀ ĐÃ TẢI LÊN</div><div class="fgrid">${files.map((f,i)=>{const pct=f.count>0?Math.round(f.with_answer/f.count*100):0,isAI=f.parse_method==='vision_ai';return`<div class="fcard ${S.sf===f.id?'sel':''}" onclick="selF('${f.id}')"><div class="fc-h"><div class="fc-ic ${fc(i)}">${fi2(i)}</div><div><div class="fc-nm">${f.name}</div><div class="fc-dt">📅 ${f.uploaded_at}</div></div></div><div class="fc-st"><span class="fc-s">${f.count} câu</span><span class="fc-s ok">${f.with_answer} đáp án</span><span class="fc-s" style="background:#ede9fe;color:var(--p)">${pct}%</span>${isAI?'<span class="fc-s ai">🤖 AI</span>':''}${pct<50&&!isAI?'<span class="fc-s warn">⚠ Ít đáp án</span>':''}</div><div class="fc-pb"><div class="fc-bar"><div class="fc-fill" style="width:${pct}%"></div></div></div><div class="fc-act"><button class="fc-btn go" onclick="event.stopPropagation();startF('${f.id}')">▶ Làm bài</button><button class="fc-btn ai-btn" onclick="event.stopPropagation();openPreview('${f.id}','${f.name.replace(/'/g,"\\'")}')">👁 Xem</button><button class="fc-btn dl" onclick="event.stopPropagation();delF('${f.id}','${f.name}')">🗑</button></div></div>`;}).join('')}</div></div>`:'<div style="text-align:center;padding:32px;color:var(--t3)"><div style="font-size:40px;margin-bottom:12px">📂</div>Chưa có đề nào</div>';
   m.innerHTML=`<div class="page"><div class="tb"><div><div class="pt">Tệp đã tải</div><div class="ps">Mỗi file = 1 đề riêng biệt</div></div></div>
-  <div class="ai-banner" style="margin-bottom:16px"><div style="font-size:26px;flex-shrink:0">🤖</div><div style="flex:1"><div style="color:#fff;font-size:13px;font-weight:700;margin-bottom:3px">Claude AI Vision</div><div style="color:rgba(255,255,255,.6);font-size:12px">${s.ai_available?'Đang hoạt động · Tự động đọc bảng ô tô màu':'Chưa kích hoạt · Cấu hình key trong main.py'}</div></div><div class="ai-badge ${s.ai_available?'on':'off'}" onclick="openAI()">${s.ai_available?'● Hoạt động':'⚙ Trạng thái'}</div></div>
   <div class="sr" style="grid-template-columns:1fr 1fr;margin-bottom:18px"><div class="sc"><div class="sic ip">📚</div><div><div class="sn2" style="color:var(--p)">${s.total_questions}</div><div class="sl2">Tổng câu hỏi</div></div></div><div class="sc"><div class="sic ig">📂</div><div><div class="sn2" style="color:var(--g)">${files.length}</div><div class="sl2">Đề thi</div></div></div></div>
   <div class="card" style="margin-bottom:14px"><div class="ct" style="margin-bottom:14px">THÊM ĐỀ MỚI</div>
     <div class="dz" id="dz" onclick="$('fi').click()"><div style="font-size:38px;margin-bottom:10px;animation:fl 3s ease-in-out infinite">📂</div><div style="font-size:15px;font-weight:700;margin-bottom:5px">Kéo thả file vào đây</div><div style="font-size:12px;color:var(--t3)">${s.ai_available?'Word/PDF · Bảng ô tô màu → AI tự nhận dạng đáp án':'Word/PDF thông thường'}</div><input type="file" id="fi" accept=".docx,.pdf" multiple onchange="hf3(this.files)"><button class="bp" style="margin-top:14px" onclick="event.stopPropagation();$('fi').click()">Chọn file</button></div>
@@ -1817,33 +1783,6 @@ async function delUserFile(fileId,userEmail,fileName){
   }catch{tst("Lỗi xóa file","err");}
 }
 
-async function openAI(){
-  om("aim");
-  const sb=$("ai-sbox"),si=$("ai-sicon"),st=$("ai-stitle"),ss=$("ai-ssub"),tg=$("tg-ai");
-  sb.className="ai-status-box loading";si.textContent="⏳";st.textContent="Đang kiểm tra...";ss.textContent="";
-  try{
-    const r=await fetch(`${API}/config`);const d=await r.json();
-    if(tg)tg.classList.toggle("on",d.ai_enabled);
-    if(d.has_api_key){
-      sb.className="ai-status-box ready";si.textContent="✅";
-      st.textContent="AI đang hoạt động";st.style.color="#065f46";
-      ss.textContent="Claude Vision đã kết nối · Tự động đọc bảng ô tô màu";ss.style.color="#059669";
-    }else{
-      sb.className="ai-status-box notready";si.textContent="❌";
-      st.textContent="Chưa cấu hình";st.style.color="#991b1b";
-      ss.textContent="Mở file main.py → thay YOUR_KEY_HERE bằng API key của bạn";ss.style.color="#dc2626";
-    }
-  }catch{sb.className="ai-status-box notready";si.textContent="⚠️";st.textContent="Không kết nối được server";}
-}
-function tgAI(){$("tg-ai")?.classList.toggle("on");}
-async function saveAI(){
-  const enabled=$("tg-ai")?.classList.contains("on")??true;
-  try{
-    await fetch(`${API}/config/ai`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({enabled})});
-    tst(enabled?"AI tự động: Bật ✅":"AI tự động: Tắt");cm("aim");await lst();rp2();
-  }catch{tst("Lỗi lưu cài đặt","err");}
-}
-
 // ── SETTINGS ──
 function rset(m){
   const role=S.user?.role||"student";
@@ -1858,8 +1797,6 @@ function rset(m){
     ${isPrivileged?`<div class="ct" style="margin:18px 0 3px">QUẢN LÝ</div>
     <div class="sr2"><div><div class="sl3">Quản lý người dùng</div><div class="sd3">Phân quyền, xóa tài khoản</div></div><button class="bp" style="padding:7px 13px;font-size:12px" onclick="nv('admin-panel')">👥 Mở</button></div>
     <div class="sr2"><div><div class="sl3">Thống kê hệ thống</div><div class="sd3">Xem toàn bộ hoạt động</div></div><button class="bp" style="padding:7px 13px;font-size:12px" onclick="nv('admin-stats')">📊 Mở</button></div>`:''}
-    <div class="ct" style="margin:18px 0 3px">AI VISION</div>
-    <div class="sr2"><div><div class="sl3">Claude AI Vision</div><div class="sd3">${S.stats.ai_available?'✅ Đang hoạt động · Đọc bảng ô tô màu':'⚙️ Cấu hình key trong file main.py'}</div></div><button class="bp" style="padding:7px 13px;font-size:12px" onclick="openAI()">🤖 Trạng thái</button></div>
     <div class="ct" style="margin:18px 0 3px">TRẢI NGHIỆM</div>
     <div class="sr2"><div><div class="sl3">Tự động sang câu tiếp</div><div class="sd3">Chuyển sau khi chọn đáp án</div></div><div class="tgg ${S.an?'on':''}" id="tg-an" onclick="tgs3()"></div></div>
     <div class="ct" style="margin:18px 0 3px">DỮ LIỆU</div>
