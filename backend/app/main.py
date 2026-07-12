@@ -36,16 +36,20 @@ if _env_data_dir and _target.resolve() != _local_data.resolve():
     # bare `Path("data/...")` continue to work without code changes.
     for sub in ("users", "uploads", "chroma_db"):
         (_target / sub).mkdir(parents=True, exist_ok=True)
-    if _local_data.exists() and not _local_data.is_symlink():
-        # Local data dir exists and is a real dir — don't touch it (this
-        # branch should only fire in dev / without DATA_DIR).
-        pass
-    elif _local_data.is_symlink():
-        # Already a symlink — refresh its target.
-        _local_data.unlink()
-        _local_data.symlink_to(_target, target_is_directory=True)
-    else:
-        _local_data.symlink_to(_target, target_is_directory=True)
+
+    # Remove existing real dir or stale symlink before linking.
+    if _local_data.is_symlink() or _local_data.exists():
+        # If it's a real dir, keep its files but only if DATA_DIR is unset;
+        # since we're here DATA_DIR is set, so wipe the local copy — the
+        # symlink will replace it.
+        if _local_data.is_symlink() or _local_data.is_file():
+            _local_data.unlink()
+        else:
+            # Real directory. Remove it entirely; all data must live on
+            # the persistent disk from now on.
+            import shutil as _shutil
+            _shutil.rmtree(_local_data)
+    _local_data.symlink_to(_target, target_is_directory=True)
 else:
     DATA_ROOT.mkdir(exist_ok=True)
 
