@@ -1,3 +1,4 @@
+import os
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
@@ -10,8 +11,43 @@ from .api.router import api_router
 
 _root = Path(__file__).resolve().parent.parent.parent
 FRONTEND_PATH = _root / "CobraQ_v3.html"
+
+# Resolve data dir: respect DATA_DIR env (Render Persistent Disk mounts at
+# e.g. /var/data). Falls back to <repo>/backend/data for local dev.
+# On Render free tier the disk is ephemeral — without a Persistent Disk
+# attached, $DATA_DIR must be set to a path Render guarantees to retain.
+_env_data_dir = os.environ.get("DATA_DIR", "").strip()
+if _env_data_dir:
+    _target = Path(_env_data_dir)
+    _target.mkdir(parents=True, exist_ok=True)
+else:
+    _target = _root / "data"
+
+# Make code that uses bare Path("data/...") work regardless of whether the
+# data dir is local or on a persistent disk. We symlink <repo>/backend/data
+# to the resolved target when they differ — that way every existing file
+# (group_scores.json, users_store.json, chroma_db/, ...) keeps working
+# without refactoring each call site.
 DATA_ROOT = _root / "data"
-DATA_ROOT.mkdir(exist_ok=True)
+_local_data = _root / "data"
+if _env_data_dir and _target.resolve() != _local_data.resolve():
+    # Ensure expected subdirs exist on the mount, then symlink the
+    # in-repo `data/` to the mount path. This way call sites that use
+    # bare `Path("data/...")` continue to work without code changes.
+    for sub in ("users", "uploads", "chroma_db"):
+        (_target / sub).mkdir(parents=True, exist_ok=True)
+    if _local_data.exists() and not _local_data.is_symlink():
+        # Local data dir exists and is a real dir — don't touch it (this
+        # branch should only fire in dev / without DATA_DIR).
+        pass
+    elif _local_data.is_symlink():
+        # Already a symlink — refresh its target.
+        _local_data.unlink()
+        _local_data.symlink_to(_target, target_is_directory=True)
+    else:
+        _local_data.symlink_to(_target, target_is_directory=True)
+else:
+    DATA_ROOT.mkdir(exist_ok=True)
 
 limiter = Limiter(key_func=get_remote_address)
 
