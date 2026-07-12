@@ -23,8 +23,9 @@ services:
       - key: ACCESS_TOKEN_EXPIRE_MINUTES
         value: "1440"
       # 🔐 Secrets — đặt trong Render Dashboard, KHÔNG commit:
-      # - ANTHROPIC_API_KEY
-      # - SECRET_KEY
+      # - GROK_API_KEY (primary AI — Grok xAI)
+      # - SECRET_KEY (JWT signing)
+      # - ANTHROPIC_API_KEY (optional — chỉ cần nếu upload PDF scan cần vision)
 
     # Persistent disk (chỉ áp dụng cho paid plan; free không có)
     # disk:

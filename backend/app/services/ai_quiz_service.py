@@ -1,6 +1,11 @@
 """
 AI Quiz Generation Service — generates high-quality multiple-choice quizzes
 from historical events that a user has explored on the map.
+
+Supports multiple AI providers via OpenAI-compatible API:
+  - Grok (xAI) — primary, fast + cheap + good Vietnamese
+  - OpenAI — fallback
+  - Any other OpenAI-compatible endpoint via AI_BASE_URL env var
 """
 from typing import Optional
 import json
@@ -9,6 +14,27 @@ import uuid
 
 from sqlalchemy.orm import Session
 from app.core.config import get_settings
+
+
+def _get_ai_client():
+    """Return (client, model_name) for the configured AI provider."""
+    settings = get_settings()
+
+    # Prefer Grok, then OpenAI-compatible custom, then legacy Anthropic
+    api_key = (
+        settings.grok_api_key
+        or settings.ai_api_key
+        or settings.anthropic_api_key
+    )
+    if not api_key or api_key in ("YOUR_KEY_HERE", ""):
+        return None, None, None
+
+    base_url = getattr(settings, "ai_base_url", None) or "https://api.x.ai/v1"
+    model = getattr(settings, "ai_model", None) or "grok-3-mini"
+
+    from openai import OpenAI
+    client = OpenAI(api_key=api_key, base_url=base_url)
+    return client, model, api_key
 
 
 def generate_map_quiz(
@@ -20,7 +46,7 @@ def generate_map_quiz(
     db: Session = None,
 ) -> dict:
     """
-    Generate a map-based quiz using Claude Sonnet.
+    Generate a map-based quiz using Grok (xAI).
     Saves the session and questions to the database.
 
     Returns:
@@ -32,7 +58,6 @@ def generate_map_quiz(
 
     settings = get_settings()
 
-    # Build rich context from events
     events_context = "\n\n".join([
         f"--- Sự kiện {i+1}: {e.title} ---\n"
         f"Thời gian: {e.year_range or 'Không rõ'}\n"
@@ -83,7 +108,6 @@ FORMAT OUTPUT — JSON thuần (không markdown code block, không giải thích
   ]
 }}"""
 
-    # Create DB session record first
     session_token = str(uuid.uuid4())
     session_record = MapQuizSession(
         user_id=user_id,
@@ -104,34 +128,34 @@ FORMAT OUTPUT — JSON thuần (không markdown code block, không giải thích
     ai_prompt_tokens = 0
     ai_completion_tokens = 0
     generation_time_ms = 0
+    model_used = "fallback"
 
-    # Call Claude Sonnet
-    if settings.anthropic_api_key and settings.anthropic_api_key != "YOUR_KEY_HERE":
+    client, model_name, _ = _get_ai_client()
+    if client is not None:
         try:
-            import anthropic
-            client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
             start_time = time.time()
-
-            response = client.messages.create(
-                model="claude-sonnet-4-20250514",
+            response = client.chat.completions.create(
+                model=model_name,
                 max_tokens=4096,
                 temperature=0.7,
-                system="Bạn là giáo viên Lịch sử Việt Nam chuyên nghiệp. Luôn trả lời bằng JSON hợp lệ, đúng format.",
-                messages=[{"role": "user", "content": prompt}]
+                messages=[
+                    {"role": "system", "content": "Bạn là giáo viên Lịch sử Việt Nam chuyên nghiệp. Luôn trả lời bằng JSON hợp lệ, đúng format yêu cầu. Không markdown, không giải thích thêm."},
+                    {"role": "user", "content": prompt},
+                ],
             )
 
             generation_time_ms = int((time.time() - start_time) * 1000)
-            response_text = response.content[0].text.strip()
+            response_text = response.choices[0].message.content.strip()
 
-            # Strip markdown code fences
             if response_text.startswith("```"):
                 lines = response_text.split("\n")
                 response_text = "\n".join(lines[1:-1] if lines[-1].strip() == "```" else lines[1:])
                 if response_text.startswith("json"):
                     response_text = response_text[4:].strip()
 
-            ai_prompt_tokens = response.usage.input_tokens
-            ai_completion_tokens = response.usage.output_tokens
+            ai_prompt_tokens = response.usage.prompt_tokens if response.usage else 0
+            ai_completion_tokens = response.usage.completion_tokens if response.usage else 0
+            model_used = model_name
 
             quiz_data = json.loads(response_text)
             generated_questions = quiz_data.get("questions", [])
@@ -141,16 +165,14 @@ FORMAT OUTPUT — JSON thuần (không markdown code block, không giải thích
         except Exception as e:
             ai_error = f"Lỗi gọi AI: {str(e)}"
     else:
-        ai_error = "Chưa cấu hình Anthropic API key"
+        ai_error = "Chưa cấu hình AI API key (GROK_API_KEY hoặc AI_API_KEY)"
 
-    # Fallback: generate simple questions if AI fails
     if not generated_questions:
         generated_questions = _generate_fallback_questions(events, num_questions, difficulty)
         session_record.ai_model_used = "fallback"
     else:
-        session_record.ai_model_used = "claude-sonnet-4-20250514"
+        session_record.ai_model_used = model_used
 
-    # Save questions to DB
     saved_questions = []
     for i, q_data in enumerate(generated_questions[:num_questions]):
         choices_json = json.dumps(q_data.get("choices", []), ensure_ascii=False)
@@ -173,14 +195,12 @@ FORMAT OUTPUT — JSON thuần (không markdown code block, không giải thích
             "question_order": i + 1,
         })
 
-    # Update session
     session_record.num_questions_generated = len(saved_questions)
     session_record.ai_prompt_tokens = ai_prompt_tokens
     session_record.ai_completion_tokens = ai_completion_tokens
     session_record.generation_time_ms = generation_time_ms
     db.commit()
 
-    # Refresh to get real question IDs
     for saved_q in db.query(MapQuizQuestion).filter(
         MapQuizQuestion.session_id == session_record.id
     ).order_by(MapQuizQuestion.question_order).all():
@@ -189,7 +209,6 @@ FORMAT OUTPUT — JSON thuần (không markdown code block, không giải thích
                 q["id"] = saved_q.id
                 break
 
-    # Rebuild questions list for response (without correct answer)
     questions_response = []
     for i, q_data in enumerate(generated_questions[:num_questions]):
         import random
@@ -243,7 +262,6 @@ def _generate_fallback_questions(events: list, num_questions: int, difficulty: i
             "difficulty": difficulty,
         })
 
-    # Pad with generic questions if needed
     while len(questions) < num_questions and events:
         questions.append({
             "question_text": f"Sự kiện nào sau đây thuộc thời kỳ {events[0].period or 'lịch sử Việt Nam'}?",

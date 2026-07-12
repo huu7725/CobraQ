@@ -22,7 +22,7 @@
 
 - [ ] Tài khoản GitHub (để push code)
 - [ ] Tài khoản Render.com (đăng ký miễn phí qua GitHub)
-- [ ] Anthropic API key: https://console.anthropic.com/
+- [ ] **Grok API key**: https://console.x.ai/ (miễn phí $25/tháng credit cho user mới)
 - [ ] Đã có `Dockerfile`, `requirements.txt`, `render.yaml` ở root repo
 
 ## Bước 1 — Push code lên GitHub
@@ -70,7 +70,13 @@ Vào tab **Environment** của service vừa tạo:
 
 | Key | Value |
 |---|---|
-| `ANTHROPIC_API_KEY` | `sk-ant-...` (lấy từ console.anthropic.com) |
+| `GROK_API_KEY` | `xai-...` (lấy từ console.x.ai — free $25/mo credits) |
+| `SECRET_KEY` | Random 64 hex chars (xem cách generate bên dưới) |
+| `DATA_DIR` | `/app/data` |
+| `PORT` | `10000` |
+| `DEBUG` | `false` |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | `1440` |
+| `ANTHROPIC_API_KEY` *(optional)* | Chỉ cần nếu upload PDF scan cần vision parsing |
 | `SECRET_KEY` | random 64 chars (chạy `[guid]::NewGuid().ToString()+"x64"` trong PowerShell nhiều lần, nối lại) |
 | `DATA_DIR` | `/app/data` (đã set sẵn trong `render.yaml`) |
 | `PORT` | `10000` (Render tự set, nhưng có thể add thủ công) |
@@ -137,7 +143,7 @@ git push
 
 Pin version trong `requirements.txt`:
 ```txt
-anthropic==0.105.2
+openai==1.50.0
 fastapi==0.115.0
 ```
 
@@ -153,9 +159,9 @@ Render tự set `PORT=10000`. Dockerfile đã đọc từ env. Nếu vẫn lỗi
 
 ### AI Fill không hoạt động (response "AI disabled" hoặc 500)
 
-1. Check tab **Environment** → `ANTHROPIC_API_KEY` đã set chưa
+1. Check tab **Environment** → `GROK_API_KEY` đã set chưa
 2. Test bằng cách gọi `POST /api/files/ai/fill-answer` trong `/docs`
-3. Check log Render → có lỗi từ Anthropic SDK không
+3. Check log Render → có lỗi từ OpenAI SDK (xAI endpoint) không
 
 ### CORS issues (frontend không gọi được API)
 

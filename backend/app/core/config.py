@@ -17,8 +17,11 @@ class Settings(BaseSettings):
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 60 * 24  # 24 hours
 
-    # AI
-    anthropic_api_key: str = "YOUR_KEY_HERE"
+    # AI Provider: "grok" (xAI, OpenAI-compatible) hoặc "anthropic" (legacy)
+    ai_provider: str = "grok"
+    ai_api_key: str = ""  # XAI_API_KEY cho Grok, ANTHROPIC_API_KEY cho Claude
+    grok_api_key: str = ""  # legacy alias
+    anthropic_api_key: str = ""  # legacy
 
     # Paths
     data_dir: str = "data"

@@ -828,18 +828,24 @@ FORMAT OUTPUT (JSON thuần, không markdown, không giải thích gì thêm):
     ai_model = "fallback"
     latency_ms = 0
 
-    if settings.anthropic_api_key and settings.anthropic_api_key != "YOUR_KEY_HERE":
+    # Resolve API key: Grok preferred, then AI_API_KEY, then legacy Anthropic
+    api_key = settings.grok_api_key or settings.ai_api_key or settings.anthropic_api_key
+    if api_key and api_key not in ("YOUR_KEY_HERE", ""):
         try:
-            import anthropic
+            from openai import OpenAI
             import time as _t
-            client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+            base_url = getattr(settings, "ai_base_url", None) or "https://api.x.ai/v1"
+            model = getattr(settings, "ai_model", None) or "grok-3-mini"
+            client = OpenAI(api_key=api_key, base_url=base_url)
             t0 = _t.time()
-            response = client.messages.create(
-                model="claude-sonnet-4-20250514",
+            response = client.chat.completions.create(
+                model=model,
                 max_tokens=1024,
                 temperature=0.5,
-                system="Bạn là giáo viên Lịch sử Việt Nam. Luôn trả lời bằng JSON hợp lệ.",
-                messages=[{"role": "user", "content": prompt}],
+                messages=[
+                    {"role": "system", "content": "Bạn là giáo viên Lịch sử Việt Nam. Luôn trả lời bằng JSON hợp lệ."},
+                    {"role": "user", "content": prompt},
+                ],
             )
             latency_ms = int((_t.time() - t0) * 1000)
             txt = response.content[0].text.strip()
