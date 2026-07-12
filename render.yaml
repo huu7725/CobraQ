@@ -14,6 +14,10 @@ services:
     envVars:
       - key: PYTHONUNBUFFERED
         value: "1"
+      # DATABASE_URL — Postgres connection string from Neon.
+      # Set this in Render Dashboard → Environment (NOT in this file).
+      # Format: postgresql://user:pass@host/db?sslmode=require
+      # Leave unset locally to fall back to SQLite.
       - key: DATA_DIR
         value: /app/data
       - key: PORT
@@ -23,6 +27,7 @@ services:
       - key: ACCESS_TOKEN_EXPIRE_MINUTES
         value: "1440"
       # 🔐 Secrets — đặt trong Render Dashboard, KHÔNG commit:
+      # - DATABASE_URL (Neon Postgres connection string)
       # - GROK_API_KEY (primary AI — Grok xAI)
       # - SECRET_KEY (JWT signing)
       # - ANTHROPIC_API_KEY (optional — chỉ cần nếu upload PDF scan cần vision)

@@ -54,6 +54,34 @@ if _env_data_dir and _target.resolve() != _local_data.resolve():
 else:
     DATA_ROOT.mkdir(exist_ok=True)
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Startup: create tables + seed historical events (idempotent)."""
+    try:
+        from .db.database import Base, engine, DATABASE_URL
+        from .models import historical_event, map_quiz_question, map_quiz_session, map_quiz_answer, user_map_progress, user, quiz_history  # noqa: F401
+        Base.metadata.create_all(bind=engine)
+        # Don't print the full URL — it contains the password. Print the host only.
+        host = "sqlite"
+        try:
+            from urllib.parse import urlparse
+            host = urlparse(DATABASE_URL).hostname or "sqlite"
+        except Exception:
+            pass
+        print(f"[startup] DB ready, host={host}", flush=True)
+    except Exception as e:
+        print(f"[startup] init_db failed: {e}", flush=True)
+
+    try:
+        from .services.seed_map_data import seed_events
+        seed_events()
+    except Exception as e:
+        print(f"[startup] seed_events failed: {e}", flush=True)
+
+    yield
+
+
 limiter = Limiter(key_func=get_remote_address)
 
 app = FastAPI(
@@ -74,27 +102,6 @@ app.add_middleware(
 )
 
 app.include_router(api_router, prefix="/api")
-
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """Startup: create SQLite tables + seed historical events (idempotent)."""
-    try:
-        from .db.database import Base, engine, SessionLocal
-        # Import all models so SQLAlchemy registers them on Base.metadata
-        from .models import historical_event, map_quiz_question, map_quiz_session, map_quiz_answer, user_map_progress, user, quiz_history  # noqa: F401
-        Base.metadata.create_all(bind=engine)
-        print("[startup] SQLite tables ensured", flush=True)
-    except Exception as e:
-        print(f"[startup] init_db failed: {e}", flush=True)
-
-    try:
-        from .services.seed_map_data import seed_events
-        seed_events()
-    except Exception as e:
-        print(f"[startup] seed_events failed: {e}", flush=True)
-
-    yield
 
 
 @app.get("/")
