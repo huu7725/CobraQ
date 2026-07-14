@@ -79,6 +79,16 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         print(f"[startup] seed_events failed: {e}", flush=True)
 
+    # Seed the first admin from ADMIN_EMAIL / ADMIN_PASSWORD env vars.
+    # Idempotent: if an admin with that email already exists, this only
+    # refreshes the password hash and re-asserts the role. See
+    # backend/app/services/seed_admin.py for the rationale.
+    try:
+        from .services.seed_admin import seed_admin
+        seed_admin()
+    except Exception as e:
+        print(f"[startup] seed_admin failed: {e}", flush=True)
+
     yield
 
 
