@@ -1,0 +1,14 @@
+# Install into a CUDA-enabled environment for LoRA/QLoRA training.
+torch>=2.3,<3
+transformers>=4.48,<6
+peft>=0.14,<1
+accelerate>=1,<2
+sentence-transformers>=3,<6
+chromadb>=0.5,<2
+sacrebleu>=2.4,<3
+rouge-score>=0.1.2,<1
+bert-score>=0.3.13,<1
+openpyxl>=3.1,<4
+
+# Optional for QLoRA on a supported CUDA/OS combination:
+# bitsandbytes>=0.45,<1

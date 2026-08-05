@@ -1,0 +1,89 @@
+{
+  "schema_version": "1.0",
+  "book": {
+    "book_id": "history12_kntt_2023_sample",
+    "title": "Lịch sử 12",
+    "series": "Kết nối tri thức với cuộc sống",
+    "grade": 12,
+    "publisher": "Nhà xuất bản Giáo dục Việt Nam",
+    "edition": "Bản mẫu tháng 10-2023",
+    "language": "vi",
+    "source_file": "file doc/SGK Lịch sử 12 Kết nối tri thức.pdf"
+  },
+  "page_mapping": {
+    "pdf_to_book_offset": -2,
+    "content_pdf_start": 8,
+    "content_pdf_end": 113
+  },
+  "topics": [
+    {
+      "topic_id": "topic_01",
+      "title": "Thế giới trong và sau Chiến tranh lạnh",
+      "book_page_start": 6,
+      "book_page_end": 20,
+      "lessons": [
+        {"lesson_id": "lesson_01", "number": 1, "title": "Liên hợp quốc", "book_page_start": 6, "book_page_end": 12},
+        {"lesson_id": "lesson_02", "number": 2, "title": "Trật tự thế giới trong Chiến tranh lạnh", "book_page_start": 13, "book_page_end": 17},
+        {"lesson_id": "lesson_03", "number": 3, "title": "Trật tự thế giới sau Chiến tranh lạnh", "book_page_start": 18, "book_page_end": 20}
+      ]
+    },
+    {
+      "topic_id": "topic_02",
+      "title": "ASEAN: Những chặng đường lịch sử",
+      "book_page_start": 21,
+      "book_page_end": 30,
+      "lessons": [
+        {"lesson_id": "lesson_04", "number": 4, "title": "Sự ra đời và phát triển của Hiệp hội các quốc gia Đông Nam Á (ASEAN)", "book_page_start": 21, "book_page_end": 24},
+        {"lesson_id": "lesson_05", "number": 5, "title": "Cộng đồng ASEAN: Từ ý tưởng đến hiện thực", "book_page_start": 25, "book_page_end": 30}
+      ]
+    },
+    {
+      "topic_id": "topic_03",
+      "title": "Cách mạng tháng Tám năm 1945, chiến tranh giải phóng dân tộc và chiến tranh bảo vệ Tổ quốc trong lịch sử Việt Nam (từ tháng 8 năm 1945 đến nay)",
+      "book_page_start": 31,
+      "book_page_end": 60,
+      "lessons": [
+        {"lesson_id": "lesson_06", "number": 6, "title": "Cách mạng tháng Tám năm 1945", "book_page_start": 31, "book_page_end": 36},
+        {"lesson_id": "lesson_07", "number": 7, "title": "Cuộc kháng chiến chống thực dân Pháp (1945-1954)", "book_page_start": 37, "book_page_end": 44},
+        {"lesson_id": "lesson_08", "number": 8, "title": "Cuộc kháng chiến chống Mỹ, cứu nước (1954-1975)", "book_page_start": 45, "book_page_end": 53},
+        {"lesson_id": "lesson_09", "number": 9, "title": "Cuộc đấu tranh bảo vệ Tổ quốc từ sau tháng 4-1975 đến nay và một số bài học lịch sử", "book_page_start": 54, "book_page_end": 60}
+      ]
+    },
+    {
+      "topic_id": "topic_04",
+      "title": "Công cuộc Đổi mới ở Việt Nam từ năm 1986 đến nay",
+      "book_page_start": 61,
+      "book_page_end": 72,
+      "lessons": [
+        {"lesson_id": "lesson_10", "number": 10, "title": "Khái quát về công cuộc Đổi mới từ năm 1986 đến nay", "book_page_start": 61, "book_page_end": 64},
+        {"lesson_id": "lesson_11", "number": 11, "title": "Thành tựu cơ bản và bài học của công cuộc Đổi mới ở Việt Nam từ năm 1986 đến nay", "book_page_start": 65, "book_page_end": 72}
+      ]
+    },
+    {
+      "topic_id": "topic_05",
+      "title": "Lịch sử đối ngoại của Việt Nam thời cận-hiện đại",
+      "book_page_start": 73,
+      "book_page_end": 87,
+      "lessons": [
+        {"lesson_id": "lesson_12", "number": 12, "title": "Hoạt động đối ngoại của Việt Nam trong đấu tranh giành độc lập dân tộc", "book_page_start": 73, "book_page_end": 76},
+        {"lesson_id": "lesson_13", "number": 13, "title": "Hoạt động đối ngoại của Việt Nam trong kháng chiến chống Pháp và kháng chiến chống Mỹ", "book_page_start": 77, "book_page_end": 81},
+        {"lesson_id": "lesson_14", "number": 14, "title": "Hoạt động đối ngoại của Việt Nam từ năm 1975 đến nay", "book_page_start": 82, "book_page_end": 87}
+      ]
+    },
+    {
+      "topic_id": "topic_06",
+      "title": "Hồ Chí Minh trong lịch sử Việt Nam",
+      "book_page_start": 88,
+      "book_page_end": 109,
+      "lessons": [
+        {"lesson_id": "lesson_15", "number": 15, "title": "Khái quát cuộc đời và sự nghiệp của Hồ Chí Minh", "book_page_start": 88, "book_page_end": 93},
+        {"lesson_id": "lesson_16", "number": 16, "title": "Hồ Chí Minh - Anh hùng giải phóng dân tộc", "book_page_start": 94, "book_page_end": 104},
+        {"lesson_id": "lesson_17", "number": 17, "title": "Dấu ấn Hồ Chí Minh trong lòng nhân dân thế giới và Việt Nam", "book_page_start": 105, "book_page_end": 109}
+      ]
+    }
+  ],
+  "appendices": [
+    {"appendix_id": "glossary", "title": "Bảng tra cứu khái niệm, thuật ngữ", "book_page_start": 110, "book_page_end": 110},
+    {"appendix_id": "transcription", "title": "Bảng phiên âm", "book_page_start": 111, "book_page_end": 111}
+  ]
+}

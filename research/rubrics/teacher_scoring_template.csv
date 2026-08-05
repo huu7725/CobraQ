@@ -1,0 +1,1 @@
+question_id,rater_id,blind_batch,condition_id_unblinded,question_type,factual_accuracy,source_support,unique_correct_answer,clarity,curriculum_alignment,cognitive_alignment,distractor_quality,pedagogical_language,difficulty_fit,factual_error_found,decision,editing_minutes,comment

@@ -1,6 +1,7 @@
 import re
 from dataclasses import dataclass, field
-from typing import Optional
+import unicodedata
+from typing import Any, Optional
 
 
 def _count_tokens(text: str) -> int:
@@ -20,6 +21,7 @@ class Chunk:
     source: str = ""
     page: int = 0
     score: float = 0.0
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -110,6 +112,11 @@ class TrustLayer:
         low_conf = [c for c in chunks if c.score < self.min_confidence]
         if len(low_conf) > len(chunks) * 0.5:
             return True, "Độ chính xác trích dẫn quá thấp."
+
+        evidence = "\n".join(chunk.text for chunk in chunks)
+        unsupported_facts = sorted(extract_fact_markers(answer) - extract_fact_markers(evidence))
+        if unsupported_facts:
+            return True, "Dữ kiện thời gian không có trong ngữ liệu: " + ", ".join(unsupported_facts)
 
         no_info_phrases = [
             "không biết", "không có", "không tìm thấy",
@@ -206,22 +213,66 @@ class TrustLayer:
         """
         blocked, reason = self.should_block(chunks, response)
 
-        cited_texts = set()
-        for chunk in chunks:
-            words = set(chunk.text.lower().split())
-            cited_texts.update(w for w in words if len(w) > 3)
+        evidence = "\n".join(chunk.text for chunk in chunks)
+        evidence_tokens = _content_tokens(evidence)
+        response_tokens = _content_tokens(response)
+        unsupported_tokens = response_tokens - evidence_tokens
+        grounded_token_ratio = 1.0 - len(unsupported_tokens) / max(len(response_tokens), 1)
 
-        response_words = set(response.lower().split())
-        uncited = [w for w in response_words if len(w) > 3 and w not in cited_texts]
-        hallucination_rate = len(uncited) / max(len(response_words), 1)
+        response_facts = extract_fact_markers(response)
+        evidence_facts = extract_fact_markers(evidence)
+        unsupported_facts = sorted(response_facts - evidence_facts)
+        fact_support_rate = (
+            1.0 - len(unsupported_facts) / len(response_facts)
+            if response_facts else 1.0
+        )
+        hallucination_rate = 1.0 - fact_support_rate if response_facts else 1.0 - grounded_token_ratio
 
         return {
             "blocked": blocked,
             "block_reason": reason,
             "hallucination_rate": round(hallucination_rate, 4),
+            "hallucination_detected": bool(unsupported_facts) or blocked,
+            "fact_support_rate": round(fact_support_rate, 4),
+            "unsupported_facts": unsupported_facts,
+            "grounded_token_ratio": round(max(0.0, grounded_token_ratio), 4),
             "citation_count": len(chunks),
             "source_coverage": min(len(chunks) / max(self.min_chunks, 1), 1.0),
+            "metric_version": "fact-markers-v1",
         }
 
 
 trust_layer = TrustLayer()
+
+
+_TOKEN_RE = re.compile(r"[0-9A-Za-zÀ-ỹĐđ]+", re.UNICODE)
+_YEAR_RE = re.compile(r"(?<!\d)(?:1[5-9]\d{2}|20\d{2})(?!\d)")
+_FULL_DATE_RE = re.compile(
+    r"(?i)\b(?:ngày\s+)?\d{1,2}\s*[-/]\s*\d{1,2}"
+    r"(?:\s*[-/]\s*(?:1[5-9]\d{2}|20\d{2}))?\b"
+)
+_STOP_WORDS = {
+    "của", "và", "là", "có", "được", "trong", "với", "cho", "các",
+    "những", "một", "theo", "này", "đó", "khi", "từ", "đến", "về",
+}
+
+
+def _fold(text: str) -> str:
+    value = unicodedata.normalize("NFD", text.lower())
+    return "".join(char for char in value if unicodedata.category(char) != "Mn").replace("đ", "d")
+
+
+def _content_tokens(text: str) -> set[str]:
+    return {
+        token
+        for token in (_fold(match.group(0)) for match in _TOKEN_RE.finditer(text or ""))
+        if len(token) > 2 and token not in {_fold(item) for item in _STOP_WORDS}
+    }
+
+
+def extract_fact_markers(text: str) -> set[str]:
+    """Extract dates and years that must be directly supported by evidence."""
+    normalized = unicodedata.normalize("NFC", text or "")
+    dates = {re.sub(r"\s+", "", value.lower().replace("ngày", "")) for value in _FULL_DATE_RE.findall(normalized)}
+    years = set(_YEAR_RE.findall(normalized))
+    return dates | years

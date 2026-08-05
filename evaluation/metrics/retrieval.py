@@ -43,11 +43,10 @@ def compute_mrr(retrieval_results: list[tuple[int, float]]) -> float:
     """
     if not retrieval_results:
         return 0.0
-    ranks = [r for r, _ in retrieval_results if r > 0]
-    if not ranks:
+    relevant_ranks = [rank for rank, relevance in retrieval_results if rank > 0 and relevance > 0]
+    if not relevant_ranks:
         return 0.0
-    reciprocal_ranks = [1.0 / r for r in ranks]
-    return round(sum(reciprocal_ranks) / len(reciprocal_ranks), 4)
+    return round(1.0 / min(relevant_ranks), 4)
 
 
 def compute_hit_rate_k(retrieval_results: list[tuple[int, float]], k: int = 5) -> float:
@@ -63,8 +62,7 @@ def compute_hit_rate_k(retrieval_results: list[tuple[int, float]], k: int = 5) -
     """
     if not retrieval_results:
         return 0.0
-    hits = sum(1 for rank, _ in retrieval_results if 0 < rank <= k)
-    return round(hits / len(retrieval_results), 4)
+    return 1.0 if any(0 < rank <= k and relevance > 0 for rank, relevance in retrieval_results) else 0.0
 
 
 def compute_precision_k(retrieval_results: list[tuple[int, float]], k: int = 5) -> float:
@@ -81,7 +79,7 @@ def compute_precision_k(retrieval_results: list[tuple[int, float]], k: int = 5) 
     top_k = [(r, s) for r, s in retrieval_results if 0 < r <= k]
     if not top_k:
         return 0.0
-    relevant = sum(1 for rank, _ in top_k if rank > 0)
+    relevant = sum(1 for _, relevance in top_k if relevance > 0)
     return round(relevant / k, 4)
 
 
@@ -99,8 +97,16 @@ def compute_ndcg_k(retrieval_results: list[tuple[int, float]], k: int = 5) -> fl
     def dcg(gains: list[float]) -> float:
         return sum(g / math.log2(i + 2) for i, g in enumerate(gains))
 
-    gains = [1.0 if 0 < r <= k else 0.0 for r, _ in retrieval_results[:k]]
-    ideal_gains = sorted([1.0 if 0 < r <= k else 0.0 for r, _ in retrieval_results], reverse=True)[:k]
+    observed = sorted(
+        [(rank, relevance) for rank, relevance in retrieval_results if 0 < rank <= k],
+        key=lambda item: item[0],
+    )
+    gains = [max(0.0, relevance) for _, relevance in observed]
+    gains.extend([0.0] * (k - len(gains)))
+    ideal_gains = sorted(
+        [max(0.0, relevance) for _, relevance in retrieval_results], reverse=True
+    )[:k]
+    ideal_gains.extend([0.0] * (k - len(ideal_gains)))
 
     dcg_val = dcg(gains)
     idcg_val = dcg(ideal_gains)
@@ -189,7 +195,7 @@ def compute_retrieval_metrics_for_entry(
         "ndcg_5": ndcg_5,
         "num_retrieved": len(retrieved_chunk_ids),
         "num_relevant": len(ground_truth_relevant),
-        "recall": round(len(retrieved_chunk_ids & ground_truth_relevant) / max(len(ground_truth_relevant), 1), 4),
+        "recall": round(len(set(retrieved_chunk_ids) & ground_truth_relevant) / max(len(ground_truth_relevant), 1), 4),
     }
 
 
@@ -247,6 +253,7 @@ def generate_retrieval_report(log_path: Path, limit: int = 500, user_id: Optiona
 
     return {
         **agg,
+        "ground_truth_status": "proxy_not_for_research_conclusions",
         "per_query_sample": per_query[:20],
         "total_tutoring_queries": len(tutoring),
     }

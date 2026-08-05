@@ -28,10 +28,12 @@ desktop.ini
 
 # Test / debug / scripts (one-off, not part of production)
 test_*.py
+!tests/test_research_pipeline.py
 verify_*.py
 debug_*.html
 verify_*.md
 apply_*.py
+!research/apply_ocr_review.py
 server.log
 events.json
 index.html
@@ -46,6 +48,12 @@ data/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+tmp/
+tools/tessdata/
+artifacts/
+file doc/
+output/
+outputs/
 
 # Data test folder
-"data test/"
+data test/

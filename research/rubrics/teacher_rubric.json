@@ -1,0 +1,36 @@
+{
+  "schema_version": "1.0",
+  "title": "Rubric giáo viên đánh giá câu hỏi CobraQ",
+  "scale": {
+    "1": "Không đạt, không thể sử dụng",
+    "2": "Cần sửa lớn",
+    "3": "Dùng được sau khi chỉnh sửa",
+    "4": "Tốt, chỉ cần sửa rất ít",
+    "5": "Có thể đưa vào ngân hàng câu hỏi"
+  },
+  "criteria": [
+    {"id": "factual_accuracy", "label": "Chính xác dữ kiện lịch sử", "weight": 20, "critical": true},
+    {"id": "source_support", "label": "Câu hỏi và đáp án được nguồn trích dẫn hỗ trợ", "weight": 15, "critical": true},
+    {"id": "unique_correct_answer", "label": "Đáp án đúng duy nhất", "weight": 15, "critical": true, "applies_to": ["multiple_choice"]},
+    {"id": "clarity", "label": "Câu dẫn rõ ràng, không mơ hồ", "weight": 10, "critical": false},
+    {"id": "curriculum_alignment", "label": "Phù hợp SGK và mục tiêu bài học", "weight": 10, "critical": false},
+    {"id": "cognitive_alignment", "label": "Đúng mức độ nhận thức yêu cầu", "weight": 10, "critical": false},
+    {"id": "distractor_quality", "label": "Phương án nhiễu hợp lý và không vô tình đúng", "weight": 10, "critical": false, "applies_to": ["multiple_choice"]},
+    {"id": "pedagogical_language", "label": "Ngôn ngữ và tính sư phạm", "weight": 5, "critical": false},
+    {"id": "difficulty_fit", "label": "Độ khó phù hợp với học sinh lớp 12", "weight": 5, "critical": false}
+  ],
+  "decision_rules": {
+    "approve": "Điểm có trọng số >= 4.2 và mọi tiêu chí critical >= 4",
+    "revise": "Điểm có trọng số từ 3.4 đến dưới 4.2 và không có lỗi dữ kiện nghiêm trọng",
+    "reject": "Điểm có trọng số < 3.4 hoặc bất kỳ tiêu chí critical <= 2",
+    "critical_gate": 4
+  },
+  "required_fields": [
+    "question_id",
+    "rater_id",
+    "factual_error_found",
+    "decision",
+    "editing_minutes",
+    "comment"
+  ]
+}
