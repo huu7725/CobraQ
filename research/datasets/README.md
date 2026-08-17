@@ -15,6 +15,17 @@ Required fields:
 
 The training command rejects records without `teacher_approved` status.
 
+### AQG 600-sample annotation workflow
+
+1. Run `python research/build_aqg_candidates.py` to create deterministic,
+   source-grounded candidates with `pending_teacher_review` status.
+2. Review and, where needed, rewrite every item in
+   `outputs/cobraq_aqg_review/CobraQ_AQG_600_Review.xlsx`.
+3. Run `python research/finalize_aqg_dataset.py --workbook <path>` to validate
+   progress. Add `--apply` only after accepted rows satisfy the teacher rubric.
+4. The finalizer exports train/validation/test splits grouped by source chunk,
+   preventing the same textbook evidence from leaking across splits.
+
 ## Retrieval gold CSV
 
 Each query must be judged against the corpus independently of system output.

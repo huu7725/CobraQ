@@ -30,6 +30,7 @@ desktop.ini
 test_*.py
 !tests/test_research_pipeline.py
 verify_*.py
+!research/verify_adapter.py
 debug_*.html
 verify_*.md
 apply_*.py

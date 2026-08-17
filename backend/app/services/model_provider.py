@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import gc
 from pathlib import Path
 import time
 from typing import Protocol
@@ -22,6 +23,9 @@ class GenerationOutput:
     latency_ms: int = 0
     prompt_tokens: int = 0
     completion_tokens: int = 0
+    peak_vram_mb: float = 0.0
+    original_prompt_tokens: int = 0
+    input_truncated: bool = False
 
 
 class TextGenerationBackend(Protocol):
@@ -72,9 +76,10 @@ class OpenAICompatibleBackend:
 class LocalTransformersBackend:
     """Lazy local SLM backend with optional PEFT adapter."""
 
-    def __init__(self, model_id: str, adapter_path: str = ""):
+    def __init__(self, model_id: str, adapter_path: str = "", seed: int = 42):
         self.model_id = model_id
         self.adapter_path = adapter_path
+        self.seed = seed
         self._tokenizer = None
         self._model = None
         self._torch = None
@@ -92,14 +97,31 @@ class LocalTransformersBackend:
                 "Local SLM dependencies are missing. Install requirements-research.txt."
             ) from error
         self._torch = torch
-        self._tokenizer = AutoTokenizer.from_pretrained(self.model_id, use_fast=True)
+        torch.manual_seed(self.seed)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed_all(self.seed)
+        tokenizer_source = self.adapter_path or self.model_id
+        self._tokenizer = AutoTokenizer.from_pretrained(tokenizer_source, use_fast=True)
         if self._tokenizer.pad_token_id is None:
             self._tokenizer.pad_token = self._tokenizer.eos_token
-        self._model = AutoModelForCausalLM.from_pretrained(
-            self.model_id,
-            torch_dtype=(torch.float16 if torch.cuda.is_available() else torch.float32),
-            device_map="auto" if torch.cuda.is_available() else None,
-        )
+        model_kwargs = {"torch_dtype": torch.float32}
+        if torch.cuda.is_available():
+            try:
+                from transformers import BitsAndBytesConfig
+            except ImportError as error:
+                raise ModelBackendError("Install bitsandbytes for local 4-bit CUDA inference") from error
+            compute_dtype = torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
+            model_kwargs = {
+                "quantization_config": BitsAndBytesConfig(
+                    load_in_4bit=True,
+                    bnb_4bit_quant_type="nf4",
+                    bnb_4bit_use_double_quant=True,
+                    bnb_4bit_compute_dtype=compute_dtype,
+                ),
+                "torch_dtype": compute_dtype,
+                "device_map": "auto",
+            }
+        self._model = AutoModelForCausalLM.from_pretrained(self.model_id, **model_kwargs)
         if self.adapter_path:
             adapter = Path(self.adapter_path)
             try:
@@ -115,7 +137,20 @@ class LocalTransformersBackend:
         tokenizer = self._tokenizer
         model = self._model
         started = time.perf_counter()
-        inputs = tokenizer(prompt, return_tensors="pt")
+        model_context = int(getattr(model.config, "max_position_embeddings", 2048))
+        max_input_length = max(256, model_context - max_new_tokens)
+        inputs = tokenizer(prompt, return_tensors="pt", truncation=False)
+        original_prompt_tokens = int(inputs["input_ids"].shape[1])
+        input_truncated = original_prompt_tokens > max_input_length
+        if input_truncated:
+            prefix_length = max_input_length // 2
+            suffix_length = max_input_length - prefix_length
+            for key, value in inputs.items():
+                if value.ndim == 2 and value.shape[1] == original_prompt_tokens:
+                    inputs[key] = torch.cat(
+                        (value[:, :prefix_length], value[:, -suffix_length:]),
+                        dim=1,
+                    )
         device = next(model.parameters()).device
         inputs = {key: value.to(device) for key, value in inputs.items()}
         do_sample = temperature > 0
@@ -127,8 +162,12 @@ class LocalTransformersBackend:
         }
         if do_sample:
             generation_kwargs.update(temperature=temperature, top_p=top_p)
+        if torch.cuda.is_available():
+            torch.cuda.reset_peak_memory_stats()
         with torch.inference_mode():
             output = model.generate(**inputs, **generation_kwargs)
+        if torch.cuda.is_available():
+            torch.cuda.synchronize()
         generated = output[0][inputs["input_ids"].shape[1]:]
         text = tokenizer.decode(generated, skip_special_tokens=True).strip()
         return GenerationOutput(
@@ -138,13 +177,34 @@ class LocalTransformersBackend:
             latency_ms=int((time.perf_counter() - started) * 1000),
             prompt_tokens=int(inputs["input_ids"].shape[1]),
             completion_tokens=int(generated.shape[0]),
+            peak_vram_mb=(
+                round(torch.cuda.max_memory_allocated() / (1024 * 1024), 2)
+                if torch.cuda.is_available()
+                else 0.0
+            ),
+            original_prompt_tokens=original_prompt_tokens,
+            input_truncated=input_truncated,
         )
 
+    def close(self):
+        self._model = None
+        self._tokenizer = None
+        gc.collect()
+        if self._torch is not None and self._torch.cuda.is_available():
+            self._torch.cuda.empty_cache()
+        self._torch = None
 
-def create_backend(name: str, *, model_id: str, adapter_path: str = "") -> TextGenerationBackend:
+
+def create_backend(
+    name: str,
+    *,
+    model_id: str,
+    adapter_path: str = "",
+    seed: int = 42,
+) -> TextGenerationBackend:
     normalized = name.strip().lower()
     if normalized == "local":
-        return LocalTransformersBackend(model_id, adapter_path)
+        return LocalTransformersBackend(model_id, adapter_path, seed=seed)
     if normalized in {"api", "openai-compatible"}:
         if adapter_path:
             raise ModelBackendError("The API reference backend cannot load a local LoRA adapter")

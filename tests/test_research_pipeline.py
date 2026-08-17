@@ -22,6 +22,8 @@ from evaluation.metrics.factuality import evaluate_question_factuality
 from evaluation.metrics.retrieval import compute_retrieval_metrics_for_entry
 from research.analyze_student_items import correlation, cronbach_alpha
 from research.apply_ocr_review import apply_reviews
+from research.build_aqg_candidates import build_targets
+from research.finalize_aqg_dataset import assign_splits
 from research.prepare_ocr_review import classify
 from research.score_teacher_rubric import score_row
 
@@ -126,6 +128,30 @@ class FactualityTests(unittest.TestCase):
             )
         )
 
+    def test_question_schema_rejects_contained_choice(self):
+        question = {
+            "question_type": "multiple_choice",
+            "stem": "Nhận định nào sau đây đúng theo ngữ liệu Lịch sử 12?",
+            "choices": [
+                {"label": "A", "text": "Liên hợp quốc thông qua Chương trình nghị sự 2030."},
+                {"label": "B", "text": "Nội dung không liên quan đến sự kiện đang được hỏi."},
+                {"label": "C", "text": "Liên hợp quốc đặt ra 17 mục tiêu phát triển bền vững."},
+                {
+                    "label": "D",
+                    "text": "Năm 2015, Liên hợp quốc thông qua Chương trình nghị sự 2030.",
+                },
+            ],
+            "correct_answer": "A",
+            "explanation": "Ngữ liệu xác nhận nội dung về Chương trình nghị sự 2030.",
+            "difficulty": 1,
+            "bloom_level": "remember",
+            "lesson_id": "lesson_01",
+            "generation_condition": "C3",
+            "citations": [{"chunk_id": "c1", "page": 11, "quote": "Năm 2015"}],
+        }
+        with self.assertRaises(ValueError):
+            GeneratedQuestion.model_validate(question)
+
 
 class RetrievalMetricTests(unittest.TestCase):
     def test_metrics_use_relevance_and_accept_list_input(self):
@@ -157,6 +183,51 @@ class ExperimentConfigTests(unittest.TestCase):
 
 
 class HumanEvaluationTests(unittest.TestCase):
+    def test_aqg_splits_are_balanced_without_chunk_leakage(self):
+        records = []
+        for lesson_number in range(1, 7):
+            lesson_id = f"lesson_{lesson_number:02d}"
+            for chunk_number in range(10):
+                chunk_id = f"{lesson_id}-chunk-{chunk_number:02d}"
+                for item_number in range(10):
+                    records.append(
+                        {
+                            "record_id": f"{chunk_id}-item-{item_number:02d}",
+                            "lesson_id": lesson_id,
+                            "source_chunk_ids": [chunk_id],
+                            "question_type": "multiple_choice" if item_number < 7 else "short_essay",
+                            "difficulty": item_number % 3 + 1,
+                        }
+                    )
+        splits = assign_splits(records)
+        self.assertEqual({name: len(rows) for name, rows in splits.items()}, {
+            "train": 480,
+            "validation": 60,
+            "test": 60,
+        })
+        chunk_sets = {
+            name: {row["source_chunk_ids"][0] for row in rows}
+            for name, rows in splits.items()
+        }
+        self.assertFalse(chunk_sets["train"] & chunk_sets["validation"])
+        self.assertFalse(chunk_sets["train"] & chunk_sets["test"])
+        self.assertFalse(chunk_sets["validation"] & chunk_sets["test"])
+
+    def test_aqg_annotation_targets_match_the_preregistered_distribution(self):
+        plan = json.loads(
+            (ROOT / "research" / "configs" / "aqg_annotation_plan.json").read_text(encoding="utf-8")
+        )
+        targets = build_targets(plan)
+        self.assertEqual(len(targets), 600)
+        self.assertEqual(
+            {kind: sum(row["question_type"] == kind for row in targets) for kind in plan["target_distribution"]["question_type"]},
+            plan["target_distribution"]["question_type"],
+        )
+        self.assertEqual(
+            {level: sum(str(row["difficulty"]) == level for row in targets) for level in plan["target_distribution"]["difficulty"]},
+            plan["target_distribution"]["difficulty"],
+        )
+
     def test_applying_correction_preserves_audit_and_recomputes_dates(self):
         source = {
             "chunk_id": "test-chunk",

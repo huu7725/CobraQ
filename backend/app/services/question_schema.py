@@ -48,6 +48,11 @@ class GeneratedQuestion(BaseModel):
             normalized = [" ".join(choice.text.lower().split()) for choice in self.choices]
             if len(set(normalized)) != 4:
                 raise ValueError("Choice texts must be unique")
+            for index, left in enumerate(normalized):
+                for right in normalized[index + 1 :]:
+                    shorter, longer = sorted((left, right), key=len)
+                    if len(shorter) >= 20 and shorter in longer:
+                        raise ValueError("Choice texts must not be near-duplicates")
         elif self.choices:
             raise ValueError("Short-essay questions must not contain choices")
         if self.generation_condition in {"C1", "C3"} and not self.citations:

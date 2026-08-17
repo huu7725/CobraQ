@@ -12,13 +12,15 @@
     "embedding_model": "intfloat/multilingual-e5-small",
     "retrieval_mode": "hybrid",
     "retrieval_top_k": 5,
-    "rerank_top_n": 3,
+    "rerank_top_n": 1,
+    "generation_context_max_chars": 300,
+    "generation_max_attempts": 1,
     "seed": 42,
     "decoding": {
-      "temperature": 0.2,
-      "top_p": 0.9,
-      "max_new_tokens": 768,
-      "do_sample": true
+      "temperature": 0.0,
+      "top_p": 1.0,
+      "max_new_tokens": 1280,
+      "do_sample": false
     },
     "lora": {
       "rank": 16,

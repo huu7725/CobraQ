@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from collections import Counter
 from datetime import datetime, timezone
 import json
 from pathlib import Path
@@ -44,11 +45,16 @@ def main() -> int:
         default=ROOT / "data" / "research" / "experiment_results.jsonl",
     )
     parser.add_argument("--conditions", default="C0,C1,C2,C3")
+    parser.add_argument("--limit", type=int, help="Use only the first N requests for a pilot run")
     parser.add_argument("--backend", choices=["local", "api"], default="local")
     parser.add_argument("--continue-on-error", action="store_true")
     args = parser.parse_args()
 
     requests = load_jsonl(args.requests)
+    if args.limit is not None:
+        if args.limit < 1:
+            raise ValueError("--limit must be at least 1")
+        requests = requests[: args.limit]
     conditions = [value.strip() for value in args.conditions.split(",") if value.strip()]
     if not set(conditions) <= {"C0", "C1", "C2", "C3"}:
         raise ValueError("Conditions must be selected from C0,C1,C2,C3")
@@ -97,12 +103,17 @@ def main() -> int:
 
     summary = {}
     for condition in conditions:
-        successful = [row for row in results if row.get("condition") == condition and row["status"] == "ok"]
+        condition_rows = [row for row in results if row.get("condition") == condition]
+        successful = [row for row in condition_rows if row["status"] == "ok"]
+        failed = [row for row in condition_rows if row["status"] == "error"]
         latencies = [row["latency_ms"] for row in successful]
         questions = [question for row in successful for question in row.get("questions", [])]
         summary[condition] = {
-            "runs": len([row for row in results if row.get("condition") == condition]),
+            "runs": len(condition_rows),
             "successful_runs": len(successful),
+            "failed_runs": len(failed),
+            "success_rate": round(len(successful) / max(len(condition_rows), 1), 4),
+            "error_types": dict(sorted(Counter(row["error_type"] for row in failed).items())),
             "questions": len(questions),
             "auto_verified_rate": round(
                 sum(q["auto_evaluation"]["status"] == "auto_verified" for q in questions) / max(len(questions), 1),

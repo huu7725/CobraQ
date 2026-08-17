@@ -7,11 +7,11 @@ from pathlib import Path
 import re
 from typing import Any, Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 
 from app.core.config import get_settings
 from .experiment_config import get_condition, load_experiment_config
-from .model_provider import create_backend
+from .model_provider import ModelBackendError, create_backend
 from .question_schema import GeneratedQuestion
 from .trust_layer import Chunk, TrustLayer
 from .vector_service import VectorService
@@ -60,10 +60,19 @@ class AutoExamPipeline:
             filters={"lesson_id": request.lesson_id},
         )
 
-    @staticmethod
-    def _context(chunks: list[Chunk]) -> str:
+    def _context(self, chunks: list[Chunk]) -> str:
+        max_chars = int(self.shared.get("generation_context_max_chars", 300))
+        per_chunk = max(1, max_chars // max(len(chunks), 1))
+
+        def excerpt(text: str) -> str:
+            value = " ".join(text.split())
+            if len(value) <= per_chunk:
+                return value
+            shortened = value[:per_chunk].rsplit(" ", 1)[0].rstrip(" ,;:")
+            return shortened or value[:per_chunk]
+
         return "\n\n".join(
-            f"[{chunk.id} | trang {chunk.page}]\n{chunk.text}" for chunk in chunks
+            f"[{chunk.id} | trang {chunk.page}]\n{excerpt(chunk.text)}" for chunk in chunks
         )
 
     def _prompt(self, request: AutoExamRequest, chunks: list[Chunk], use_rag: bool) -> str:
@@ -73,23 +82,18 @@ class AutoExamPipeline:
             if use_rag
             else "Để citations là danh sách rỗng."
         )
-        return f"""NHIỆM VỤ
-Sinh đúng {request.num_questions} câu hỏi {request.question_type} cho {request.lesson_id}.
-Độ khó: {request.difficulty}/3. Bậc nhận thức: {request.bloom_level}.
+        return f"""Bạn là hệ thống sinh câu hỏi Lịch sử 12. Chỉ trả về JSON hợp lệ, không thêm Markdown.
+### Yêu cầu
+Sinh đúng {request.num_questions} câu hỏi {request.question_type} cho {request.lesson_id}; độ khó {request.difficulty}/3, Bloom {request.bloom_level}.
 Mục tiêu bổ sung: {request.learning_objective or 'Không có'}.
-
-QUY TẮC
 - Không bịa đặt ngày tháng, nhân vật, địa điểm hoặc quan hệ nguyên nhân-kết quả.
 - Trắc nghiệm phải có đúng bốn lựa chọn A/B/C/D và một đáp án đúng duy nhất.
 - Phương án nhiễu phải hợp lý nhưng không được vô tình đúng.
 - {citation_rule}
-- Chỉ trả về JSON, không dùng Markdown.
 
-NGỮ LIỆU
+### Ngữ liệu SGK
 {context}
-
-JSON OUTPUT
-{{"questions":[{{"question_type":"{request.question_type}","stem":"...","choices":[],"correct_answer":"A","explanation":"...","difficulty":{request.difficulty},"bloom_level":"{request.bloom_level}","lesson_id":"{request.lesson_id}","citations":[],"generation_condition":"{request.condition_id}"}}]}}
+### Trả lời
 """
 
     @staticmethod
@@ -134,37 +138,81 @@ JSON OUTPUT
     def generate(self, request: AutoExamRequest) -> dict[str, Any]:
         condition = get_condition(request.condition_id)
         verification_chunks = self._retrieve(request)
-        exposed_chunks = verification_chunks if condition.use_rag else []
+        rerank_top_n = int(self.shared.get("rerank_top_n", len(verification_chunks)))
+        exposed_chunks = verification_chunks[:rerank_top_n] if condition.use_rag else []
         backend_name = request.model_backend or self.settings.cobraq_model_backend
         adapter = condition.adapter_path if condition.use_lora else ""
         if adapter and not Path(adapter).is_absolute():
             adapter = str(Path(__file__).resolve().parents[3] / adapter)
         backend_key = (backend_name, self.settings.cobraq_base_model, adapter)
         if backend_key not in self._backends:
+            for existing_backend in self._backends.values():
+                close = getattr(existing_backend, "close", None)
+                if callable(close):
+                    close()
+            self._backends.clear()
             self._backends[backend_key] = create_backend(
                 backend_name,
                 model_id=self.settings.cobraq_base_model,
                 adapter_path=adapter,
+                seed=int(self.shared["seed"]),
             )
         backend = self._backends[backend_key]
         decoding = self.shared["decoding"]
-        output = backend.generate(
-            self._prompt(request, exposed_chunks, condition.use_rag),
-            max_new_tokens=int(decoding["max_new_tokens"]),
-            temperature=float(decoding["temperature"]),
-            top_p=float(decoding["top_p"]),
-        )
-        payload = self._extract_json(output.text)
-        raw_questions = payload.get("questions") or []
-        if len(raw_questions) != request.num_questions:
-            raise ValueError(
-                f"Model returned {len(raw_questions)} questions; expected {request.num_questions}"
+        prompt = self._prompt(request, exposed_chunks, condition.use_rag)
+        max_attempts = int(self.shared.get("generation_max_attempts", 1))
+        total_latency_ms = 0
+        total_prompt_tokens = 0
+        total_completion_tokens = 0
+        peak_vram_mb = 0.0
+        original_prompt_tokens = 0
+        input_truncated = False
+        last_error = ""
+        output = None
+        question_models: list[GeneratedQuestion] = []
+        for attempt in range(1, max_attempts + 1):
+            output = backend.generate(
+                prompt,
+                max_new_tokens=int(decoding["max_new_tokens"]),
+                temperature=float(decoding["temperature"]),
+                top_p=float(decoding["top_p"]),
             )
+            total_latency_ms += output.latency_ms
+            total_prompt_tokens += output.prompt_tokens
+            total_completion_tokens += output.completion_tokens
+            peak_vram_mb = max(peak_vram_mb, output.peak_vram_mb)
+            original_prompt_tokens = max(original_prompt_tokens, output.original_prompt_tokens)
+            input_truncated = input_truncated or output.input_truncated
+            try:
+                payload = self._extract_json(output.text)
+                raw_questions = payload.get("questions") or []
+                if len(raw_questions) != request.num_questions:
+                    raise ValueError(
+                        f"Model returned {len(raw_questions)} questions; expected {request.num_questions}"
+                    )
+                question_models = []
+                for raw in raw_questions:
+                    prepared = dict(raw)
+                    prepared["lesson_id"] = request.lesson_id
+                    prepared["generation_condition"] = request.condition_id
+                    question_models.append(GeneratedQuestion.model_validate(prepared))
+                break
+            except (json.JSONDecodeError, ValidationError, ValueError, TypeError) as error:
+                preview = output.text[:200].replace("\n", " ")
+                last_error = (
+                    f"attempt {attempt}: {type(error).__name__}: {error}; "
+                    f"tokens={output.prompt_tokens}/{output.original_prompt_tokens} input, "
+                    f"{output.completion_tokens} output, truncated={output.input_truncated}; "
+                    f"output={preview!r}"
+                )
+        else:
+            raise ModelBackendError(
+                f"Model failed JSON/schema validation after {max_attempts} attempts. {last_error}"
+            )
+
+        assert output is not None
         validated = []
-        for raw in raw_questions:
-            raw["lesson_id"] = request.lesson_id
-            raw["generation_condition"] = request.condition_id
-            question = GeneratedQuestion.model_validate(raw)
+        for question in question_models:
             trust = self.trust.evaluate(self._claim_text(question), verification_chunks)
             cited_ids = {citation.chunk_id for citation in question.citations}
             citation_valid = self._citation_is_valid(question, exposed_chunks, condition.use_rag)
@@ -195,9 +243,13 @@ JSON OUTPUT
             "model_backend": backend_name,
             "model_id": output.model_id,
             "adapter_id": output.adapter_id,
-            "latency_ms": output.latency_ms,
-            "prompt_tokens": output.prompt_tokens,
-            "completion_tokens": output.completion_tokens,
+            "latency_ms": total_latency_ms,
+            "prompt_tokens": total_prompt_tokens,
+            "completion_tokens": total_completion_tokens,
+            "peak_vram_mb": peak_vram_mb,
+            "original_prompt_tokens": original_prompt_tokens,
+            "input_truncated": input_truncated,
+            "generation_attempts": attempt,
             "retrieved_chunks": [
                 {
                     "chunk_id": chunk.id,

@@ -1,0 +1,54 @@
+{
+  "schema_version": "1.0",
+  "dataset_id": "cobraq_history12_aqg_v1",
+  "corpus_id": "history12_kntt_2023_sample",
+  "seed": 42,
+  "total_candidates": 600,
+  "lesson_quotas": {
+    "lesson_01": 36,
+    "lesson_02": 36,
+    "lesson_03": 36,
+    "lesson_04": 36,
+    "lesson_05": 36,
+    "lesson_06": 35,
+    "lesson_07": 35,
+    "lesson_08": 35,
+    "lesson_09": 35,
+    "lesson_10": 35,
+    "lesson_11": 35,
+    "lesson_12": 35,
+    "lesson_13": 35,
+    "lesson_14": 35,
+    "lesson_15": 35,
+    "lesson_16": 35,
+    "lesson_17": 35
+  },
+  "target_distribution": {
+    "question_type": {
+      "multiple_choice": 420,
+      "short_essay": 180
+    },
+    "difficulty": {
+      "1": 240,
+      "2": 240,
+      "3": 120
+    },
+    "bloom_level": {
+      "remember": 240,
+      "understand": 240,
+      "analyze": 120
+    }
+  },
+  "candidate_policy": {
+    "generation_methods": [
+      "year_cloze_mcq_v1",
+      "source_selection_mcq_v1",
+      "extractive_guided_essay_v1"
+    ],
+    "status": "pending_teacher_review",
+    "training_allowed_before_approval": false,
+    "minimum_teacher_score": 4.2,
+    "critical_score_gate": 4,
+    "split_unit": "source_chunk_id"
+  }
+}

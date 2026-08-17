@@ -80,6 +80,36 @@ collection.
 
 ## 2. Prepare AQG requests and LoRA data
 
+Build the reproducible 600-item annotation candidate set from the reviewed
+corpus:
+
+```powershell
+python research/build_aqg_candidates.py
+```
+
+Review `outputs/cobraq_aqg_review/CobraQ_AQG_600_Review.xlsx`. Source and draft
+columns are integrity-checked; teacher edits belong only in the `teacher_*`
+columns. Complete the nine rubric criteria, decision, factual-error flag,
+reviewer ID, and review date in `DANH_GIA`.
+
+Validate progress without writing training data:
+
+```powershell
+python research/finalize_aqg_dataset.py `
+  --workbook outputs/cobraq_aqg_review/CobraQ_AQG_600_Review.xlsx
+```
+
+After the rubric gates pass, export teacher-approved train/validation/test
+splits:
+
+```powershell
+python research/finalize_aqg_dataset.py `
+  --workbook outputs/cobraq_aqg_review/CobraQ_AQG_600_Review.xlsx --apply
+```
+
+Splits are grouped by source chunk within each lesson so evidence used for
+training cannot reappear in validation or test.
+
 Generate a deterministic set of 40 lesson-balanced requests:
 
 ```powershell
@@ -94,18 +124,39 @@ Install GPU research dependencies and train:
 
 ```powershell
 pip install -r requirements-research.txt
-python research/train_lora.py --train research/datasets/train.jsonl `
-  --validation research/datasets/validation.jsonl --qlora
+python research/train_lora.py --train data/research/aqg_v1/approved/train.jsonl `
+  --validation data/research/aqg_v1/approved/validation.jsonl --qlora `
+  --max-length 1792 --batch-size 1 --save-steps 10 `
+  --resume-from-checkpoint auto
 ```
 
 The training script stops when CUDA is unavailable unless `--allow-cpu` is used
-for a smoke test. The current machine is CPU-only, so it cannot produce the final
-LoRA adapter in a practical time.
+for a smoke test. The completed local QLoRA run used an RTX 3050 Ti Laptop GPU,
+480/60 reviewed train/validation examples, three epochs, and 3.076 MB peak VRAM.
+Its manifest is `artifacts/adapters/history12_lora/training_manifest.json`.
+
+Verify adapter loading and one held-out generation:
+
+```powershell
+python research/verify_adapter.py --index 0 --max-new-tokens 1024
+```
+
+The report is written to
+`artifacts/adapters/history12_lora/verification_report.json`. A valid JSON result
+is necessary but not sufficient: schema, citation, factuality and teacher gates
+still apply.
 
 ## 3. Run C0-C3
 
 ```powershell
 python research/run_experiments.py --backend local --continue-on-error
+```
+
+Use a one-request infrastructure pilot before the full run:
+
+```powershell
+python research/run_experiments.py --backend local --limit 1 `
+  --continue-on-error --output data/research/experiment_pilot_1.jsonl
 ```
 
 - C0: base SLM.
@@ -114,7 +165,9 @@ python research/run_experiments.py --backend local --continue-on-error
 - C3: LoRA SLM + RAG.
 
 The runner writes one JSONL record per request/condition plus a summary containing
-fact support, automatic verification rate, and p50/p95 latency.
+success/error rates, error types, fact support, automatic verification rate, and
+p50/p95 latency. A failed schema generation is an experimental result and must not
+be silently removed from the denominator.
 
 ## 4. Teacher and student evaluation
 
@@ -160,6 +213,7 @@ claims about SLM cost and latency must use the local backend.
 ## 6. Quality gates
 
 - RAG questions require valid chunk citations and exact source quotes.
+- Near-duplicate multiple-choice options are rejected before Trust Layer review.
 - Dates/years in the stem, correct answer, and explanation must exist in evidence.
 - Evidence with pending OCR review forces `needs_teacher_review`.
 - Every student-facing question must have status `teacher_approved`.
