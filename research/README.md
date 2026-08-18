@@ -110,6 +110,20 @@ python research/finalize_aqg_dataset.py `
 Splits are grouped by source chunk within each lesson so evidence used for
 training cannot reappear in validation or test.
 
+Export the same 600 approved items with the compact v2 model target:
+
+```powershell
+python research/build_compact_aqg_dataset.py --apply
+```
+
+The compact files are written to `data/research/aqg_v2/approved` with the
+original 480/60/60 split. Inside `response.questions[]`, the model target keeps
+only `question_type`, `stem`, `choices`, `correct_answer`, and `explanation`.
+Question ID, lesson metadata, difficulty, Bloom level, citations, and experiment
+condition remain outside the target under `provenance` so the server can assign
+them deterministically. The exporter verifies the review-workbook hash, exact
+field preservation, split counts, and source-chunk isolation before writing.
+
 Generate a deterministic set of 40 lesson-balanced requests:
 
 ```powershell
@@ -124,50 +138,87 @@ Install GPU research dependencies and train:
 
 ```powershell
 pip install -r requirements-research.txt
-python research/train_lora.py --train data/research/aqg_v1/approved/train.jsonl `
-  --validation data/research/aqg_v1/approved/validation.jsonl --qlora `
+python research/train_lora.py --train data/research/aqg_v2/approved/train.jsonl `
+  --validation data/research/aqg_v2/approved/validation.jsonl `
+  --output artifacts/adapters/history12_lora_v2 --qlora `
   --max-length 1792 --batch-size 1 --save-steps 10 `
   --resume-from-checkpoint auto
 ```
 
 The training script stops when CUDA is unavailable unless `--allow-cpu` is used
-for a smoke test. The completed local QLoRA run used an RTX 3050 Ti Laptop GPU,
-480/60 reviewed train/validation examples, three epochs, and 3.076 MB peak VRAM.
-Its manifest is `artifacts/adapters/history12_lora/training_manifest.json`.
+for a smoke test. The completed v2 QLoRA run used an RTX 3050 Ti Laptop GPU,
+480/60 reviewed train/validation examples, three epochs, and 2,947.96 MiB peak
+PyTorch VRAM. It finished 180 optimizer steps in 47 minutes 43 seconds; validation
+loss decreased from 0.2580 to 0.2285 and no input/target pair was truncated. Its
+manifest is `artifacts/adapters/history12_lora_v2/training_manifest.json`.
 
 Verify adapter loading and one held-out generation:
 
 ```powershell
-python research/verify_adapter.py --index 0 --max-new-tokens 1024
+python research/verify_adapter.py --adapter artifacts/adapters/history12_lora_v2 `
+  --test data/research/aqg_v2/approved/test.jsonl --index 0 `
+  --max-new-tokens 1280
 ```
 
 The report is written to
-`artifacts/adapters/history12_lora/verification_report.json`. A valid JSON result
+`artifacts/adapters/history12_lora_v2/verification_report.json`. A valid JSON result
 is necessary but not sufficient: schema, citation, factuality and teacher gates
 still apply.
 
-## 3. Run C0-C3
+## 3. Run the gated C0-C3 pilot
 
 ```powershell
-python research/run_experiments.py --backend local --continue-on-error
+python research/run_experiments.py --phase pilot --backend local
 ```
 
-Use a one-request infrastructure pilot before the full run:
+The 40-request design is frozen at `research/configs/eval_design_v2.json`: it
+covers all 17 lessons with 14/13/13 requests at difficulty 1/2/3. Regenerate it
+deterministically with `python research/build_eval_requests.py`.
+
+The pilot manifest is frozen at `research/configs/pilot_v2.json`. It selects the
+same 10 requests for every condition, covers all six topics and 10 distinct
+lessons, and preserves a 7 MCQ / 3 short-essay mix. The runner writes:
+
+- `data/research/pilot_v2_results.jsonl`: all 40 attempts;
+- `data/research/pilot_v2_results.summary.json`: condition metrics;
+- `data/research/pilot_v2_results.pilot_report.json`: GO/NO-GO decision and
+  exact gate failures.
+
+The report separates JSON validity from schema validity and includes automatic
+time-fact support, citation validity, structural distractor checks, p50/p95
+latency, throughput, input truncation and peak VRAM. These automatic checks do
+not replace factual and pedagogical review by teachers.
+
+Only after the pilot decision is `go`, run the registered 40 requests per
+condition:
 
 ```powershell
-python research/run_experiments.py --backend local --limit 1 `
-  --continue-on-error --output data/research/experiment_pilot_1.jsonl
+python research/run_experiments.py --phase full --backend local `
+  --pilot-report data/research/pilot_v2_results.pilot_report.json
 ```
+
+The full runner is blocked when the pilot is `no_go` or when the request set,
+pilot manifest, experiment configuration, adapter configuration/model, or
+training manifest has changed since the pilot. Re-run the pilot after any such
+change. Use `--phase custom --limit N` only for non-registered debugging runs;
+custom mode cannot launch the 40x4 experiment.
 
 - C0: base SLM.
 - C1: base SLM + RAG.
 - C2: LoRA SLM.
 - C3: LoRA SLM + RAG.
 
-The runner writes one JSONL record per request/condition plus a summary containing
-success/error rates, error types, fact support, automatic verification rate, and
-p50/p95 latency. A failed schema generation is an experimental result and must not
-be silently removed from the denominator.
+The runner writes one JSONL record per request/condition. A failed JSON or schema
+generation is an experimental result and remains in the denominator.
+
+The frozen v2 pilot run on 18 August 2026 produced a `no_go` decision. C0 and C1
+both had 0/10 schema-valid generations, C2 had 8/10, and C3 had 0/10. C2 also
+contained one automatically detected unsupported time fact; its observed p95
+latency was 199,546 ms. Most C3 failures were duplicate-choice or other schema
+violations. Therefore the registered 40x4 run remains blocked. The unchanged raw
+attempts, summary, and exact gate failures are retained in the three pilot output
+files above; a remediated pipeline must be registered and pass a new pilot before
+the full experiment is allowed.
 
 ## 4. Teacher and student evaluation
 
@@ -204,7 +255,7 @@ Set these environment variables for local SLM deployment:
 
 - `COBRAQ_MODEL_BACKEND=local`
 - `COBRAQ_BASE_MODEL=TinyLlama/TinyLlama-1.1B-Chat-v1.0`
-- `COBRAQ_ADAPTER_PATH=artifacts/adapters/history12_lora`
+- `COBRAQ_ADAPTER_PATH=artifacts/adapters/history12_lora_v2`
 - `COBRAQ_CORPUS_DIR=data/research/history12_kntt`
 
 The API backend is retained only as a development/reference baseline. Research

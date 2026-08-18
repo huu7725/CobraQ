@@ -11,11 +11,15 @@ import time
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT_DIR = str(Path(__file__).resolve().parent)
+BACKEND_DIR = str(ROOT / "backend")
 while SCRIPT_DIR in sys.path:
     sys.path.remove(SCRIPT_DIR)
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
+if BACKEND_DIR not in sys.path:
+    sys.path.insert(0, BACKEND_DIR)
 
+from app.services.question_schema import ModelGenerationEnvelope
 from research.train_lora import format_prompt, load_jsonl
 
 
@@ -24,16 +28,16 @@ def parse_args():
     parser.add_argument(
         "--adapter",
         type=Path,
-        default=ROOT / "artifacts" / "adapters" / "history12_lora",
+        default=ROOT / "artifacts" / "adapters" / "history12_lora_v2",
     )
     parser.add_argument(
         "--test",
         type=Path,
-        default=ROOT / "data" / "research" / "aqg_v1" / "approved" / "test.jsonl",
+        default=ROOT / "data" / "research" / "aqg_v2" / "approved" / "test.jsonl",
     )
     parser.add_argument("--index", type=int, default=0)
     parser.add_argument("--max-input-length", type=int, default=1536)
-    parser.add_argument("--max-new-tokens", type=int, default=512)
+    parser.add_argument("--max-new-tokens", type=int, default=1280)
     parser.add_argument("--output", type=Path)
     return parser.parse_args()
 
@@ -80,11 +84,20 @@ def main() -> int:
     model.eval()
 
     prompt = format_prompt(record)
+    original_prompt_tokens = len(tokenizer(prompt, add_special_tokens=True)["input_ids"])
+    context_window = int(getattr(model.config, "max_position_embeddings", 2048))
+    input_budget = context_window - args.max_new_tokens
+    if input_budget < 1:
+        raise ValueError(
+            f"--max-new-tokens={args.max_new_tokens} leaves no room in the "
+            f"{context_window}-token context window"
+        )
+    effective_max_input = min(args.max_input_length, input_budget)
     inputs = tokenizer(
         prompt,
         return_tensors="pt",
         truncation=True,
-        max_length=args.max_input_length,
+        max_length=effective_max_input,
     ).to(model.device)
     torch.cuda.reset_peak_memory_stats()
     started = time.perf_counter()
@@ -109,19 +122,32 @@ def main() -> int:
         parsed_output = None
         valid_json = False
         parse_error = str(error)
+    valid_schema = False
+    schema_error = None
+    if valid_json:
+        try:
+            ModelGenerationEnvelope.model_validate(parsed_output)
+            valid_schema = True
+        except ValueError as error:
+            schema_error = str(error)
 
     report = {
         "adapter": str(adapter_path),
         "base_model": peft_config.base_model_name_or_path,
         "test_file": str(args.test.resolve()),
         "test_index": args.index,
-        "record_id": record.get("record_id"),
+        "record_id": record.get("sample_id") or record.get("record_id"),
         "prompt_tokens": int(inputs["input_ids"].shape[1]),
+        "original_prompt_tokens": original_prompt_tokens,
+        "input_truncated": int(inputs["input_ids"].shape[1]) < original_prompt_tokens,
+        "context_window": context_window,
         "generated_tokens": int(output_ids.shape[1] - inputs["input_ids"].shape[1]),
         "latency_seconds": round(latency_seconds, 3),
         "peak_vram_mb": round(torch.cuda.max_memory_allocated() / (1024 * 1024), 2),
         "valid_json": valid_json,
         "parse_error": parse_error,
+        "valid_schema": valid_schema,
+        "schema_error": schema_error,
         "generated_text": generated_text,
         "parsed_output": parsed_output,
         "expected_response": record["response"],

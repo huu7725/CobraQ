@@ -53,7 +53,7 @@
       "name": "LoRA SLM",
       "use_rag": false,
       "use_lora": true,
-      "adapter_path": "artifacts/adapters/history12_lora",
+      "adapter_path": "artifacts/adapters/history12_lora_v2",
       "purpose": "Đo riêng tác động của LoRA"
     },
     {
@@ -61,7 +61,7 @@
       "name": "LoRA SLM + RAG",
       "use_rag": true,
       "use_lora": true,
-      "adapter_path": "artifacts/adapters/history12_lora",
+      "adapter_path": "artifacts/adapters/history12_lora_v2",
       "purpose": "Cấu hình CobraQ hoàn chỉnh"
     }
   ],

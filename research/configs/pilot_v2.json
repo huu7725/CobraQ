@@ -1,0 +1,85 @@
+{
+  "schema_version": "2.0",
+  "pilot_id": "cobraq-aqg-v2-pilot-10x4",
+  "description": "Pilot tien dang ky cho Adapter v2: 10 yeu cau dung chung cho C0-C3.",
+  "source_requests": "research/datasets/eval_requests.jsonl",
+  "sample_size_per_condition": 10,
+  "required_conditions": ["C0", "C1", "C2", "C3"],
+  "selection": {
+    "method": "fixed_stratified_sample_selected_before_v2_model_outputs",
+    "seed": 42,
+    "selected_prompt_ids": [
+      "lesson_02-d2",
+      "lesson_04-d1",
+      "lesson_09-d2",
+      "lesson_08-d3",
+      "lesson_07-d1",
+      "lesson_10-d3",
+      "lesson_14-d1",
+      "lesson_13-d2",
+      "lesson_16-d1",
+      "lesson_17-d3"
+    ],
+    "target_distribution": {
+      "topic_id": {
+        "topic_01": 1,
+        "topic_02": 1,
+        "topic_03": 3,
+        "topic_04": 1,
+        "topic_05": 2,
+        "topic_06": 2
+      },
+      "difficulty": {
+        "1": 4,
+        "2": 3,
+        "3": 3
+      },
+      "question_type": {
+        "multiple_choice": 7,
+        "short_essay": 3
+      },
+      "distinct_lessons": 10
+    }
+  },
+  "gate": {
+    "all_conditions": {
+      "required_runs": 10,
+      "max_runtime_error_rate": 0.0
+    },
+    "C0": {
+      "min_json_valid_rate": 0.5,
+      "min_schema_valid_rate": 0.5
+    },
+    "C1": {
+      "min_json_valid_rate": 0.5,
+      "min_schema_valid_rate": 0.5
+    },
+    "C2": {
+      "min_json_valid_rate": 0.8,
+      "min_schema_valid_rate": 0.8
+    },
+    "C3": {
+      "min_json_valid_rate": 0.9,
+      "min_schema_valid_rate": 0.9,
+      "min_auto_verified_rate": 0.9,
+      "max_automatic_factual_error_rate": 0.0,
+      "min_mean_fact_support_rate": 0.95,
+      "max_unsupported_time_fact_rate": 0.0,
+      "min_distractor_structural_valid_rate": 0.9,
+      "max_input_truncation_rate": 0.0,
+      "max_latency_p95_ms": 120000,
+      "max_peak_vram_mb": 3800,
+      "require_peak_vram_measurement": true
+    },
+    "rag_conditions": {
+      "conditions": ["C1", "C3"],
+      "min_valid_questions": 5,
+      "min_citation_valid_rate": 1.0
+    }
+  },
+  "interpretation_notes": [
+    "Pilot nay la cong ky thuat truoc khi chay 40 yeu cau moi cau hinh, khong thay the danh gia giao vien.",
+    "Fact support tu dong chi kiem tra cac moc thoi gian va citation trong nguon, khong chung minh toan bo noi dung dung ve lich su.",
+    "Distractor structural validity chi kiem tra so luong, nhan, trung lap va do tuong dong cao; do hop ly su pham can giao vien cham mu."
+  ]
+}

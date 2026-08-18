@@ -29,6 +29,7 @@ desktop.ini
 # Test / debug / scripts (one-off, not part of production)
 test_*.py
 !tests/test_research_pipeline.py
+!tests/test_pilot_gate.py
 verify_*.py
 !research/verify_adapter.py
 debug_*.html

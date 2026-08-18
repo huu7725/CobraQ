@@ -1,0 +1,67 @@
+{
+  "schema_version": "2.0",
+  "design_id": "cobraq-aqg-v2-full-40",
+  "description": "Frozen 40-request design for each C0-C3 condition.",
+  "selected_prompt_ids": [
+    "lesson_01-d2",
+    "lesson_01-d3",
+    "lesson_02-d1",
+    "lesson_02-d2",
+    "lesson_02-d3",
+    "lesson_03-d1",
+    "lesson_03-d2",
+    "lesson_04-d1",
+    "lesson_04-d2",
+    "lesson_04-d3",
+    "lesson_05-d1",
+    "lesson_05-d3",
+    "lesson_06-d1",
+    "lesson_06-d2",
+    "lesson_07-d1",
+    "lesson_07-d2",
+    "lesson_07-d3",
+    "lesson_08-d1",
+    "lesson_08-d3",
+    "lesson_09-d1",
+    "lesson_09-d2",
+    "lesson_10-d2",
+    "lesson_10-d3",
+    "lesson_11-d1",
+    "lesson_11-d2",
+    "lesson_11-d3",
+    "lesson_12-d1",
+    "lesson_12-d2",
+    "lesson_12-d3",
+    "lesson_13-d2",
+    "lesson_13-d3",
+    "lesson_14-d1",
+    "lesson_14-d3",
+    "lesson_15-d1",
+    "lesson_15-d2",
+    "lesson_16-d1",
+    "lesson_16-d2",
+    "lesson_16-d3",
+    "lesson_17-d1",
+    "lesson_17-d3"
+  ],
+  "expected_distribution": {
+    "topic_id": {
+      "topic_01": 7,
+      "topic_02": 5,
+      "topic_03": 9,
+      "topic_04": 5,
+      "topic_05": 7,
+      "topic_06": 7
+    },
+    "difficulty": {
+      "1": 14,
+      "2": 13,
+      "3": 13
+    },
+    "question_type": {
+      "multiple_choice": 27,
+      "short_essay": 13
+    },
+    "distinct_lessons": 17
+  }
+}

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 import re
@@ -10,9 +11,9 @@ from typing import Any, Literal, Optional
 from pydantic import BaseModel, Field, ValidationError
 
 from app.core.config import get_settings
-from .experiment_config import get_condition, load_experiment_config
+from .experiment_config import DEFAULT_PATH, ExperimentCondition, load_experiment_config
 from .model_provider import ModelBackendError, create_backend
-from .question_schema import GeneratedQuestion
+from .question_schema import GeneratedQuestion, ModelGenerationEnvelope, QuestionContent
 from .trust_layer import Chunk, TrustLayer
 from .vector_service import VectorService
 
@@ -29,10 +30,14 @@ class AutoExamRequest(BaseModel):
 
 
 class AutoExamPipeline:
-    def __init__(self):
+    def __init__(self, experiment_config_path: str | Path = DEFAULT_PATH):
         settings = get_settings()
-        config = load_experiment_config()
+        self.experiment_config_path = Path(experiment_config_path).resolve()
+        config = load_experiment_config(self.experiment_config_path)
         shared = config["shared"]
+        self.conditions = {
+            item["id"]: ExperimentCondition(**item) for item in config["conditions"]
+        }
         corpus_dir = Path(settings.cobraq_corpus_dir)
         project_root = Path(__file__).resolve().parents[3]
         if not corpus_dir.is_absolute():
@@ -64,24 +69,21 @@ class AutoExamPipeline:
         max_chars = int(self.shared.get("generation_context_max_chars", 300))
         per_chunk = max(1, max_chars // max(len(chunks), 1))
 
-        def excerpt(text: str) -> str:
-            value = " ".join(text.split())
-            if len(value) <= per_chunk:
-                return value
-            shortened = value[:per_chunk].rsplit(" ", 1)[0].rstrip(" ,;:")
-            return shortened or value[:per_chunk]
-
         return "\n\n".join(
-            f"[{chunk.id} | trang {chunk.page}]\n{excerpt(chunk.text)}" for chunk in chunks
+            f"[{chunk.id} | trang {chunk.page}]\n{self._excerpt(chunk.text, per_chunk)}"
+            for chunk in chunks
         )
+
+    @staticmethod
+    def _excerpt(text: str, max_chars: int) -> str:
+        value = " ".join(text.split())
+        if len(value) <= max_chars:
+            return value
+        shortened = value[:max_chars].rsplit(" ", 1)[0].rstrip(" ,;:")
+        return shortened or value[:max_chars]
 
     def _prompt(self, request: AutoExamRequest, chunks: list[Chunk], use_rag: bool) -> str:
         context = self._context(chunks) if use_rag else "Không cung cấp ngữ liệu truy xuất."
-        citation_rule = (
-            "Mỗi câu phải có citations chứa chunk_id, page và một quote nguyên văn từ ngữ liệu."
-            if use_rag
-            else "Để citations là danh sách rỗng."
-        )
         return f"""Bạn là hệ thống sinh câu hỏi Lịch sử 12. Chỉ trả về JSON hợp lệ, không thêm Markdown.
 ### Yêu cầu
 Sinh đúng {request.num_questions} câu hỏi {request.question_type} cho {request.lesson_id}; độ khó {request.difficulty}/3, Bloom {request.bloom_level}.
@@ -89,7 +91,8 @@ Mục tiêu bổ sung: {request.learning_objective or 'Không có'}.
 - Không bịa đặt ngày tháng, nhân vật, địa điểm hoặc quan hệ nguyên nhân-kết quả.
 - Trắc nghiệm phải có đúng bốn lựa chọn A/B/C/D và một đáp án đúng duy nhất.
 - Phương án nhiễu phải hợp lý nhưng không được vô tình đúng.
-- {citation_rule}
+- JSON ngoài cùng chỉ có trường questions. Mỗi phần tử chỉ có question_type, stem, choices, correct_answer, explanation.
+- Không sinh question_id, lesson_id, difficulty, bloom_level, citations hoặc generation_condition; máy chủ sẽ tự gắn các trường này.
 
 ### Ngữ liệu SGK
 {context}
@@ -135,8 +138,68 @@ Mục tiêu bổ sung: {request.learning_objective or 'Không có'}.
                 return False
         return bool(question.citations)
 
+    @staticmethod
+    def _question_id(
+        request: AutoExamRequest,
+        question: QuestionContent,
+        index: int,
+    ) -> str:
+        identity = {
+            "condition_id": request.condition_id,
+            "lesson_id": request.lesson_id,
+            "question_type": request.question_type,
+            "difficulty": request.difficulty,
+            "bloom_level": request.bloom_level,
+            "index": index,
+            "content": question.model_dump(mode="json"),
+        }
+        canonical = json.dumps(identity, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:16]
+        return f"cobraq-{request.condition_id.lower()}-{request.lesson_id}-{digest}"
+
+    @staticmethod
+    def _server_citations(
+        chunks: list[Chunk], use_rag: bool, context_max_chars: int = 300
+    ) -> list[dict[str, Any]]:
+        if not use_rag:
+            return []
+        per_chunk = max(1, context_max_chars // max(len(chunks), 1))
+        citations = []
+        for chunk in chunks:
+            quote = AutoExamPipeline._excerpt(chunk.text, min(per_chunk, 800))
+            if quote:
+                citations.append({"chunk_id": chunk.id, "page": chunk.page, "quote": quote})
+        return citations
+
+    @classmethod
+    def _finalize_question(
+        cls,
+        request: AutoExamRequest,
+        question: QuestionContent,
+        chunks: list[Chunk],
+        use_rag: bool,
+        index: int,
+        context_max_chars: int = 300,
+    ) -> GeneratedQuestion:
+        if question.question_type != request.question_type:
+            raise ValueError(
+                f"Model returned question_type={question.question_type}; "
+                f"expected {request.question_type}"
+            )
+        return GeneratedQuestion.model_validate(
+            {
+                **question.model_dump(),
+                "question_id": cls._question_id(request, question, index),
+                "difficulty": request.difficulty,
+                "bloom_level": request.bloom_level,
+                "lesson_id": request.lesson_id,
+                "citations": cls._server_citations(chunks, use_rag, context_max_chars),
+                "generation_condition": request.condition_id,
+            }
+        )
+
     def generate(self, request: AutoExamRequest) -> dict[str, Any]:
-        condition = get_condition(request.condition_id)
+        condition = self.conditions[request.condition_id]
         verification_chunks = self._retrieve(request)
         rerank_top_n = int(self.shared.get("rerank_top_n", len(verification_chunks)))
         exposed_chunks = verification_chunks[:rerank_top_n] if condition.use_rag else []
@@ -185,17 +248,23 @@ Mục tiêu bổ sung: {request.learning_objective or 'Không có'}.
             input_truncated = input_truncated or output.input_truncated
             try:
                 payload = self._extract_json(output.text)
-                raw_questions = payload.get("questions") or []
-                if len(raw_questions) != request.num_questions:
+                envelope = ModelGenerationEnvelope.model_validate(payload)
+                if len(envelope.questions) != request.num_questions:
                     raise ValueError(
-                        f"Model returned {len(raw_questions)} questions; expected {request.num_questions}"
+                        f"Model returned {len(envelope.questions)} questions; "
+                        f"expected {request.num_questions}"
                     )
-                question_models = []
-                for raw in raw_questions:
-                    prepared = dict(raw)
-                    prepared["lesson_id"] = request.lesson_id
-                    prepared["generation_condition"] = request.condition_id
-                    question_models.append(GeneratedQuestion.model_validate(prepared))
+                question_models = [
+                    self._finalize_question(
+                        request,
+                        question,
+                        exposed_chunks,
+                        condition.use_rag,
+                        index,
+                        int(self.shared.get("generation_context_max_chars", 300)),
+                    )
+                    for index, question in enumerate(envelope.questions, start=1)
+                ]
                 break
             except (json.JSONDecodeError, ValidationError, ValueError, TypeError) as error:
                 preview = output.text[:200].replace("\n", " ")

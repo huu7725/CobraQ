@@ -3,7 +3,9 @@ from __future__ import annotations
 import json
 from pathlib import Path
 import sys
+import tempfile
 import unittest
+from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -13,9 +15,9 @@ for path in (ROOT, BACKEND):
         sys.path.insert(0, str(path))
 
 from app.services.experiment_config import get_condition, load_experiment_config
-from app.services.auto_exam_pipeline import AutoExamPipeline
+from app.services.auto_exam_pipeline import AutoExamPipeline, AutoExamRequest
 from app.services.history_corpus import chunk_page_text, load_book_config, lookup_scope
-from app.services.question_schema import GeneratedQuestion
+from app.services.question_schema import GeneratedQuestion, ModelGenerationEnvelope, QuestionContent
 from app.services.trust_layer import Chunk, TrustLayer, extract_fact_markers
 from app.services.vector_service import VectorService
 from evaluation.metrics.factuality import evaluate_question_factuality
@@ -23,9 +25,11 @@ from evaluation.metrics.retrieval import compute_retrieval_metrics_for_entry
 from research.analyze_student_items import correlation, cronbach_alpha
 from research.apply_ocr_review import apply_reviews
 from research.build_aqg_candidates import build_targets
+from research.build_compact_aqg_dataset import TARGET_FIELDS, compact_record
 from research.finalize_aqg_dataset import assign_splits
 from research.prepare_ocr_review import classify
 from research.score_teacher_rubric import score_row
+from research.train_lora import validate_compact_payload
 
 
 BOOK_CONFIG = ROOT / "research" / "configs" / "history12_kntt.json"
@@ -98,6 +102,7 @@ class FactualityTests(unittest.TestCase):
 
     def test_question_citation_validation(self):
         question = {
+            "question_id": "test-citation-c1",
             "question_type": "multiple_choice",
             "stem": "Sự kiện nào diễn ra ngày 23-9-1945?",
             "choices": [
@@ -130,6 +135,7 @@ class FactualityTests(unittest.TestCase):
 
     def test_question_schema_rejects_contained_choice(self):
         question = {
+            "question_id": "test-contained-choice",
             "question_type": "multiple_choice",
             "stem": "Nhận định nào sau đây đúng theo ngữ liệu Lịch sử 12?",
             "choices": [
@@ -151,6 +157,107 @@ class FactualityTests(unittest.TestCase):
         }
         with self.assertRaises(ValueError):
             GeneratedQuestion.model_validate(question)
+
+    def test_compact_model_contract_forbids_server_metadata_and_extra_fields(self):
+        compact = {
+            "questions": [
+                {
+                    "question_type": "short_essay",
+                    "stem": "Trình bày ý nghĩa lịch sử của sự kiện trong ngữ liệu.",
+                    "choices": [],
+                    "correct_answer": "Nêu được ý nghĩa chính của sự kiện.",
+                    "explanation": "Câu trả lời phải bám sát dữ kiện có trong ngữ liệu.",
+                    "lesson_id": "lesson_07",
+                }
+            ]
+        }
+        with self.assertRaises(ValueError):
+            ModelGenerationEnvelope.model_validate(compact)
+
+        missing_choices = {
+            "questions": [{key: value for key, value in compact["questions"][0].items()
+                           if key not in {"choices", "lesson_id"}}]
+        }
+        with self.assertRaises(ValueError):
+            ModelGenerationEnvelope.model_validate(missing_choices)
+
+    def test_pipeline_attaches_deterministic_metadata_and_rag_citations(self):
+        request = AutoExamRequest(
+            condition_id="C3",
+            lesson_id="lesson_07",
+            question_type="multiple_choice",
+            difficulty=2,
+            bloom_level="understand",
+        )
+        compact = QuestionContent.model_validate(
+            {
+                "question_type": "multiple_choice",
+                "stem": "Sự kiện nào diễn ra ngày 23 tháng 9 năm 1945?",
+                "choices": [
+                    {"label": "A", "text": "Nhân dân Nam Bộ bắt đầu kháng chiến."},
+                    {"label": "B", "text": "Chiến dịch Điện Biên Phủ bắt đầu."},
+                    {"label": "C", "text": "Hiệp định Giơ-ne-vơ được ký kết."},
+                    {"label": "D", "text": "Cách mạng tháng Tám thành công."},
+                ],
+                "correct_answer": "A",
+                "explanation": "Ngày 23 tháng 9 năm 1945, nhân dân Nam Bộ bắt đầu kháng chiến.",
+            }
+        )
+        chunks = [
+            Chunk(
+                id="lesson_07-c1",
+                text="Ngày 23 tháng 9 năm 1945, nhân dân Nam Bộ bắt đầu kháng chiến.",
+                page=38,
+            )
+        ]
+        first = AutoExamPipeline._finalize_question(request, compact, chunks, True, 1)
+        second = AutoExamPipeline._finalize_question(request, compact, chunks, True, 1)
+
+        self.assertEqual(first.question_id, second.question_id)
+        self.assertEqual(first.difficulty, 2)
+        self.assertEqual(first.bloom_level, "understand")
+        self.assertEqual(first.lesson_id, "lesson_07")
+        self.assertEqual(first.generation_condition, "C3")
+        self.assertEqual(first.citations[0].chunk_id, "lesson_07-c1")
+        self.assertEqual(first.citations[0].page, 38)
+        self.assertIn(first.citations[0].quote, chunks[0].text)
+        self.assertLessEqual(len(first.citations[0].quote), 300)
+
+    def test_pipeline_rejects_model_question_type_mismatch(self):
+        request = AutoExamRequest(
+            condition_id="C0",
+            lesson_id="lesson_01",
+            question_type="multiple_choice",
+        )
+        essay = QuestionContent.model_validate(
+            {
+                "question_type": "short_essay",
+                "stem": "Phân tích vai trò của tổ chức được đề cập trong bài học.",
+                "choices": [],
+                "correct_answer": "Trình bày đúng vai trò theo nội dung sách giáo khoa.",
+                "explanation": "Đáp án cần chỉ ra vai trò và dẫn chứng lịch sử phù hợp.",
+            }
+        )
+        with self.assertRaisesRegex(ValueError, "expected multiple_choice"):
+            AutoExamPipeline._finalize_question(request, essay, [], False, 1)
+
+    def test_non_rag_condition_gets_no_citations(self):
+        request = AutoExamRequest(
+            condition_id="C2",
+            lesson_id="lesson_01",
+            question_type="short_essay",
+        )
+        essay = QuestionContent.model_validate(
+            {
+                "question_type": "short_essay",
+                "stem": "Phân tích vai trò của tổ chức được đề cập trong bài học.",
+                "choices": [],
+                "correct_answer": "Trình bày đúng vai trò theo nội dung sách giáo khoa.",
+                "explanation": "Đáp án cần chỉ ra vai trò và dẫn chứng lịch sử phù hợp.",
+            }
+        )
+        finalized = AutoExamPipeline._finalize_question(request, essay, [], False, 1)
+        self.assertEqual(finalized.citations, [])
 
 
 class RetrievalMetricTests(unittest.TestCase):
@@ -181,8 +288,129 @@ class ExperimentConfigTests(unittest.TestCase):
         self.assertTrue(get_condition("C3").use_rag)
         self.assertTrue(get_condition("C3").use_lora)
 
+    def test_pipeline_uses_explicit_experiment_config(self):
+        config = load_experiment_config()
+        config["shared"]["seed"] = 123
+        config["conditions"][2]["adapter_path"] = "artifacts/adapters/test-v2"
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "experiments.json"
+            path.write_text(json.dumps(config, ensure_ascii=False), encoding="utf-8")
+            with patch("app.services.auto_exam_pipeline.VectorService"):
+                pipeline = AutoExamPipeline(path)
+
+        self.assertEqual(pipeline.experiment_config_path, path.resolve())
+        self.assertEqual(pipeline.shared["seed"], 123)
+        self.assertEqual(
+            pipeline.conditions["C2"].adapter_path,
+            "artifacts/adapters/test-v2",
+        )
+
 
 class HumanEvaluationTests(unittest.TestCase):
+    def test_compact_aqg_target_preserves_content_and_excludes_metadata(self):
+        source_question = {
+            "question_id": "aqg-v1-lesson_01-001",
+            "question_type": "multiple_choice",
+            "stem": "Sự kiện nào được nêu trong ngữ liệu Lịch sử 12?",
+            "choices": [
+                {"label": "A", "text": "Phương án A"},
+                {"label": "B", "text": "Phương án B"},
+                {"label": "C", "text": "Phương án C"},
+                {"label": "D", "text": "Phương án D"},
+            ],
+            "correct_answer": "C",
+            "explanation": "Ngữ liệu được duyệt xác nhận phương án C là đúng.",
+            "difficulty": 1,
+            "bloom_level": "remember",
+            "lesson_id": "lesson_01",
+            "citations": [{"chunk_id": "c1", "page": 7, "quote": "Dẫn chứng"}],
+            "generation_condition": "C3",
+        }
+        source = {
+            "record_id": "aqg-v1-lesson_01-001",
+            "instruction": "Sinh một câu hỏi trắc nghiệm.",
+            "context": "Ngữ liệu đã duyệt.",
+            "response": {"questions": [source_question]},
+            "review_status": "teacher_approved",
+            "split": "train",
+            "approved_content_sha256": "approved-hash",
+            "lesson_id": "lesson_01",
+            "lesson_number": 1,
+            "lesson_title": "Liên hợp quốc",
+            "topic_id": "topic_01",
+            "difficulty": 1,
+            "bloom_level": "remember",
+            "source_chunk_ids": ["c1"],
+            "source_book_pages": [7],
+            "reviewer_id": "teacher-1",
+            "review_date": "2026-08-14",
+        }
+
+        compact, _ = compact_record(source, "train")
+        target = compact["response"]["questions"][0]
+        self.assertEqual(tuple(target), TARGET_FIELDS)
+        for field in TARGET_FIELDS:
+            self.assertEqual(target[field], source_question[field])
+        for metadata in (
+            "question_id", "difficulty", "bloom_level", "lesson_id",
+            "citations", "generation_condition",
+        ):
+            self.assertNotIn(metadata, target)
+        self.assertEqual(
+            compact["provenance"]["source_question_id"],
+            source_question["question_id"],
+        )
+
+    def test_compact_aqg_short_essay_keeps_empty_choices(self):
+        source = {
+            "record_id": "aqg-v1-lesson_01-002",
+            "instruction": "Sinh một câu hỏi tự luận.",
+            "context": "Ngữ liệu đã duyệt.",
+            "response": {"questions": [{
+                "question_id": "aqg-v1-lesson_01-002",
+                "question_type": "short_essay",
+                "stem": "Trình bày ý nghĩa của sự kiện được nêu trong ngữ liệu.",
+                "choices": [],
+                "correct_answer": "Ý chính tối thiểu cần có trong câu trả lời.",
+                "explanation": "Bài làm cần sử dụng đúng dữ kiện trong ngữ liệu.",
+                "difficulty": 2,
+                "bloom_level": "understand",
+                "lesson_id": "lesson_01",
+                "citations": [{"chunk_id": "c1", "page": 7, "quote": "Dẫn chứng"}],
+                "generation_condition": "C3",
+            }]},
+            "review_status": "teacher_approved",
+            "split": "validation",
+            "approved_content_sha256": "approved-hash",
+            "lesson_id": "lesson_01",
+            "lesson_number": 1,
+            "lesson_title": "Liên hợp quốc",
+            "topic_id": "topic_01",
+            "difficulty": 2,
+            "bloom_level": "understand",
+            "source_chunk_ids": ["c1"],
+            "source_book_pages": [7],
+            "reviewer_id": "teacher-1",
+            "review_date": "2026-08-14",
+        }
+
+        compact, _ = compact_record(source, "validation")
+        self.assertEqual(compact["response"]["questions"][0]["choices"], [])
+
+    def test_trainer_rejects_server_metadata_in_compact_target(self):
+        payload = {
+            "questions": [{
+                "question_type": "short_essay",
+                "stem": "Trình bày ý nghĩa của sự kiện được nêu trong ngữ liệu.",
+                "choices": [],
+                "correct_answer": "Nêu đúng các ý chính đã được giáo viên duyệt.",
+                "explanation": "Câu trả lời phải bám sát ngữ liệu sách giáo khoa.",
+                "lesson_id": "lesson_01",
+            }]
+        }
+        with self.assertRaisesRegex(ValueError, "must contain exactly"):
+            validate_compact_payload(payload)
+
     def test_aqg_splits_are_balanced_without_chunk_leakage(self):
         records = []
         for lesson_number in range(1, 7):

@@ -4,11 +4,15 @@ Expected JSONL fields:
   instruction: generation request
   context: optional textbook evidence
   response: valid JSON answer following the CobraQ question schema
+
+Records with schema_version=2.0 are validated against the compact target:
+  response.questions[]: question_type, stem, choices, correct_answer, explanation
 """
 
 from __future__ import annotations
 
 import argparse
+from hashlib import sha256
 import importlib.metadata
 import json
 import os
@@ -20,6 +24,9 @@ import time
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CONFIG = ROOT / "research" / "configs" / "experiments.json"
+COMPACT_TARGET_FIELDS = {
+    "question_type", "stem", "choices", "correct_answer", "explanation",
+}
 
 # Running this file directly places ``research/`` first on sys.path. Its local
 # ``datasets/`` data directory can then be mistaken for the optional Hugging
@@ -70,6 +77,60 @@ def parse_args():
     return parser.parse_args()
 
 
+def file_sha256(path: Path) -> str:
+    digest = sha256()
+    with path.open("rb") as stream:
+        for block in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def records_sha256(records: list[dict]) -> str:
+    payload = json.dumps(
+        records,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return sha256(payload.encode("utf-8")).hexdigest()
+
+
+def validate_compact_payload(payload: object, location: str = "response") -> None:
+    if not isinstance(payload, dict) or set(payload) != {"questions"}:
+        raise ValueError(f"{location} must contain only the questions envelope")
+    questions = payload["questions"]
+    if not isinstance(questions, list) or len(questions) != 1:
+        raise ValueError(f"{location}.questions must contain exactly one question")
+    question = questions[0]
+    if not isinstance(question, dict) or set(question) != COMPACT_TARGET_FIELDS:
+        actual = sorted(question) if isinstance(question, dict) else type(question).__name__
+        raise ValueError(
+            f"{location}.questions[0] must contain exactly "
+            f"{sorted(COMPACT_TARGET_FIELDS)}; found {actual}"
+        )
+    question_type = question["question_type"]
+    choices = question["choices"]
+    if question_type == "multiple_choice":
+        if not isinstance(choices, list) or len(choices) != 4:
+            raise ValueError(f"{location}: multiple_choice requires exactly four choices")
+        labels = [choice.get("label") for choice in choices if isinstance(choice, dict)]
+        if labels != list("ABCD"):
+            raise ValueError(f"{location}: choices must be ordered A/B/C/D objects")
+        if any(not isinstance(choice.get("text"), str) or not choice["text"].strip()
+               for choice in choices):
+            raise ValueError(f"{location}: every choice must contain non-empty text")
+        if question["correct_answer"] not in labels:
+            raise ValueError(f"{location}: correct_answer must be one of A/B/C/D")
+    elif question_type == "short_essay":
+        if choices != []:
+            raise ValueError(f"{location}: short_essay requires choices=[]")
+    else:
+        raise ValueError(f"{location}: unsupported question_type={question_type!r}")
+    for field in ("stem", "correct_answer", "explanation"):
+        if not isinstance(question[field], str) or not question[field].strip():
+            raise ValueError(f"{location}: {field} must be non-empty text")
+
+
 def load_jsonl(path: Path) -> list[dict]:
     records = []
     with path.open(encoding="utf-8") as stream:
@@ -84,6 +145,8 @@ def load_jsonl(path: Path) -> list[dict]:
                 raise ValueError(
                     f"{path}:{line_number} is not teacher_approved; unreviewed AQG data must not be trained"
                 )
+            if str(record.get("schema_version", "")).startswith("2."):
+                validate_compact_payload(record["response"], f"{path}:{line_number}:response")
             records.append(record)
     if not records:
         raise ValueError(f"No training records found in {path}")
@@ -97,6 +160,10 @@ def format_prompt(record: dict) -> str:
         "Bạn là hệ thống sinh câu hỏi Lịch sử 12. Chỉ trả về JSON hợp lệ, "
         "không thêm Markdown.\n"
         f"### Yêu cầu\n{record['instruction'].strip()}\n"
+        "- JSON ngoài cùng chỉ có trường questions. Mỗi phần tử chỉ có "
+        "question_type, stem, choices, correct_answer, explanation.\n"
+        "- Không sinh question_id, lesson_id, difficulty, bloom_level, citations "
+        "hoặc generation_condition; máy chủ sẽ tự gắn các trường này.\n"
         f"{context_block}### Trả lời\n"
     )
 
@@ -159,6 +226,38 @@ def main() -> int:
     if not train_records:
         raise ValueError("No training examples remain after applying --max-train-examples")
 
+    prompt_template_hash = sha256(
+        format_prompt({"instruction": "__REQUEST__", "context": "__CONTEXT__"}).encode("utf-8")
+    ).hexdigest()
+
+    def encoded_length(record: dict) -> int:
+        response = record["response"]
+        if not isinstance(response, str):
+            response = json.dumps(response, ensure_ascii=False)
+        prompt_ids = tokenizer(format_prompt(record), add_special_tokens=True)["input_ids"]
+        response_ids = tokenizer(
+            response + tokenizer.eos_token,
+            add_special_tokens=False,
+        )["input_ids"]
+        return len(prompt_ids) + len(response_ids)
+
+    train_token_lengths = [encoded_length(record) for record in train_records]
+    validation_token_lengths = [encoded_length(record) for record in validation_records]
+    oversized = [
+        (record.get("sample_id") or record.get("record_id") or str(index), length)
+        for index, (record, length) in enumerate(
+            zip(train_records + validation_records, train_token_lengths + validation_token_lengths),
+            start=1,
+        )
+        if length > args.max_length
+    ]
+    if oversized:
+        preview = ", ".join(f"{record_id}={length}" for record_id, length in oversized[:10])
+        raise ValueError(
+            f"{len(oversized)} examples exceed --max-length={args.max_length}; "
+            f"refusing silent truncation. Longest examples: {preview}"
+        )
+
     class AQGDataset(Dataset):
         def __init__(self, records: list[dict]):
             self.items = []
@@ -169,8 +268,14 @@ def main() -> int:
                     response = json.dumps(response, ensure_ascii=False)
                 prompt_ids = tokenizer(prompt, add_special_tokens=True)["input_ids"]
                 response_ids = tokenizer(response + tokenizer.eos_token, add_special_tokens=False)["input_ids"]
-                input_ids = (prompt_ids + response_ids)[: args.max_length]
-                prompt_length = min(len(prompt_ids), len(input_ids))
+                input_ids = prompt_ids + response_ids
+                if len(input_ids) > args.max_length:
+                    record_id = record.get("sample_id") or record.get("record_id") or "<unknown>"
+                    raise ValueError(
+                        f"{record_id} has {len(input_ids)} tokens, exceeding "
+                        f"--max-length={args.max_length}"
+                    )
+                prompt_length = len(prompt_ids)
                 labels = [-100] * prompt_length + input_ids[prompt_length:]
                 self.items.append({"input_ids": input_ids, "labels": labels})
 
@@ -223,10 +328,37 @@ def main() -> int:
 
     args.output.mkdir(parents=True, exist_ok=True)
     checkpoint_dir = args.output / "checkpoints"
+    run_config = {
+        "base_model": model_id,
+        "train_file_sha256": file_sha256(args.train),
+        "validation_file_sha256": file_sha256(args.validation) if args.validation else None,
+        "selected_train_records_sha256": records_sha256(train_records),
+        "selected_validation_records_sha256": records_sha256(validation_records),
+        "experiment_config_sha256": file_sha256(args.config),
+        "prompt_template_sha256": prompt_template_hash,
+        "dataset_schema_version": train_records[0].get("schema_version", "1.0"),
+        "max_length": args.max_length,
+        "batch_size": args.batch_size,
+        "max_steps": args.max_steps,
+        "seed": seed,
+        "qlora": args.qlora,
+        "lora": lora,
+    }
+    run_config_path = args.output / "run_config.json"
     resume_checkpoint = args.resume_from_checkpoint
     if resume_checkpoint == "auto":
         resume_checkpoint = get_last_checkpoint(str(checkpoint_dir)) if checkpoint_dir.exists() else None
         if resume_checkpoint:
+            if not run_config_path.exists():
+                raise ValueError(
+                    f"Cannot safely resume {resume_checkpoint}: run_config.json is missing"
+                )
+            previous_run_config = json.loads(run_config_path.read_text(encoding="utf-8"))
+            if previous_run_config != run_config:
+                raise ValueError(
+                    "Checkpoint dataset, prompt, model, or training configuration differs "
+                    "from the current run; refusing an unsafe resume"
+                )
             print(f"Resuming from latest checkpoint: {resume_checkpoint}")
         else:
             print(f"No checkpoint found in {checkpoint_dir}; starting from step 0")
@@ -234,6 +366,19 @@ def main() -> int:
         resume_checkpoint = str(Path(resume_checkpoint).resolve())
         if not Path(resume_checkpoint).is_dir():
             raise ValueError(f"Checkpoint directory does not exist: {resume_checkpoint}")
+        if not run_config_path.exists():
+            raise ValueError("Cannot safely resume: run_config.json is missing")
+        previous_run_config = json.loads(run_config_path.read_text(encoding="utf-8"))
+        if previous_run_config != run_config:
+            raise ValueError(
+                "Checkpoint dataset, prompt, model, or training configuration differs "
+                "from the current run; refusing an unsafe resume"
+            )
+    run_config_path.write_text(
+        json.dumps(run_config, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+        newline="\n",
+    )
 
     training_args = TrainingArguments(
         output_dir=str(checkpoint_dir),
@@ -282,6 +427,20 @@ def main() -> int:
         "validation_file": str(args.validation.resolve()) if args.validation else None,
         "train_examples": len(train_records),
         "validation_examples": len(validation_records),
+        "dataset_schema_version": train_records[0].get("schema_version", "1.0"),
+        "compact_target_validated": all(
+            str(record.get("schema_version", "")).startswith("2.")
+            for record in train_records + validation_records
+        ),
+        "train_file_sha256": run_config["train_file_sha256"],
+        "validation_file_sha256": run_config["validation_file_sha256"],
+        "experiment_config_sha256": run_config["experiment_config_sha256"],
+        "prompt_template_sha256": prompt_template_hash,
+        "token_length": {
+            "train_max": max(train_token_lengths),
+            "validation_max": max(validation_token_lengths) if validation_token_lengths else 0,
+            "truncated_examples": 0,
+        },
         "max_length": args.max_length,
         "batch_size": args.batch_size,
         "max_steps": args.max_steps,
