@@ -25,6 +25,33 @@ from evaluation.metrics.factuality import evaluate_question_factuality  # noqa: 
 DEFAULT_MANIFEST = ROOT / "research" / "configs" / "pilot_v2.json"
 DEFAULT_EXPERIMENT_CONFIG = ROOT / "research" / "configs" / "experiments.json"
 DEFAULT_EVAL_DESIGN = ROOT / "research" / "configs" / "eval_design_v2.json"
+DEFAULT_REQUESTS = ROOT / "research" / "datasets" / "eval_requests.jsonl"
+REPORT_SCHEMA_VERSION = "3.0"
+EXECUTION_CONTRACT_SCHEMA_VERSION = "1.0"
+RUNTIME_CODE_FILES = {
+    "shared_aqg_prompt": ROOT / "backend" / "app" / "services" / "aqg_prompt.py",
+    "runtime_prompt_pipeline": ROOT / "backend" / "app" / "services" / "auto_exam_pipeline.py",
+    "model_provider": ROOT / "backend" / "app" / "services" / "model_provider.py",
+    "question_schema": ROOT / "backend" / "app" / "services" / "question_schema.py",
+    "experiment_config_loader": ROOT / "backend" / "app" / "services" / "experiment_config.py",
+    "retrieval_runtime": ROOT / "backend" / "app" / "services" / "vector_service.py",
+    "trust_layer": ROOT / "backend" / "app" / "services" / "trust_layer.py",
+    "factuality_metric": ROOT / "evaluation" / "metrics" / "factuality.py",
+    "pilot_evaluator_gate": ROOT / "research" / "evaluate_pilot.py",
+    "experiment_runner": ROOT / "research" / "run_experiments.py",
+}
+ADAPTER_FINGERPRINT_EXCLUDES = {
+    "README.md",
+    "verification_report.json",
+    "verification_batch_report.json",
+}
+REQUIRED_ADAPTER_FILES = {
+    "adapter_model.safetensors",
+    "adapter_config.json",
+    "training_manifest.json",
+    "tokenizer.json",
+    "chat_template.jinja",
+}
 
 
 def load_jsonl(path: Path) -> list[dict[str, Any]]:
@@ -89,6 +116,9 @@ def _fold(text: str) -> str:
 def _failure_stage(row: dict[str, Any]) -> str:
     if row.get("status") == "ok":
         return "none"
+    structured = str(row.get("failure_stage") or "")
+    if structured in {"json_parse", "schema_validation", "runtime"}:
+        return structured
     message = str(row.get("error") or "")
     if "JSONDecodeError" in message:
         return "json_parse"
@@ -163,12 +193,21 @@ def summarize_condition(rows: list[dict[str, Any]], condition: str) -> dict[str,
     questions = [question for row in successful for question in row.get("questions", [])]
     run_count = len(rows)
     parsed_count = sum(stage in {"none", "schema_validation"} for stage in stages)
-    latencies = [float(row["latency_ms"]) for row in successful if row.get("latency_ms") is not None]
-    vram = [float(row["peak_vram_mb"]) for row in successful if row.get("peak_vram_mb") is not None]
-    truncation = [bool(row.get("input_truncated")) for row in successful]
+    telemetry_rows = [row for row in rows if row.get("latency_ms") is not None]
+    latencies = [float(row["latency_ms"]) for row in telemetry_rows]
+    vram = [
+        float(row["peak_vram_mb"])
+        for row in telemetry_rows
+        if row.get("peak_vram_mb") is not None
+    ]
+    truncation = [
+        bool(row["input_truncated"])
+        for row in telemetry_rows
+        if row.get("input_truncated") is not None
+    ]
     throughputs = [
         float(row.get("completion_tokens", 0)) / (float(row["latency_ms"]) / 1000)
-        for row in successful
+        for row in telemetry_rows
         if float(row.get("latency_ms") or 0) > 0
     ]
 
@@ -214,6 +253,7 @@ def summarize_condition(rows: list[dict[str, Any]], condition: str) -> dict[str,
         "json_valid_rate": round(parsed_count / run_count, 4) if run_count else 0.0,
         "schema_valid_rate": round(len(successful) / run_count, 4) if run_count else 0.0,
         "runtime_error_rate": round(stages.count("runtime") / run_count, 4) if run_count else 0.0,
+        "telemetry_runs": len(telemetry_rows),
         "questions": len(questions),
         "auto_verified_rate": rate([
             item.get("status") == "auto_verified" for item in auto_evaluations
@@ -326,28 +366,146 @@ def evaluate_gate(
     return ("go" if not failures else "no_go"), failures
 
 
-def artifact_fingerprint(
-    experiment_config_path: Path = DEFAULT_EXPERIMENT_CONFIG,
-) -> dict[str, Any]:
+def _path_key(path: Path) -> str:
+    resolved = path.resolve()
+    try:
+        return resolved.relative_to(ROOT.resolve()).as_posix()
+    except ValueError:
+        return resolved.as_posix()
+
+
+def _file_entry(path: Path) -> dict[str, Any]:
+    return {
+        "sha256": sha256_file(path),
+        "size_bytes": path.stat().st_size,
+    }
+
+
+def _adapter_paths(experiment_config_path: Path) -> tuple[list[Path], list[str]]:
+    if not experiment_config_path.is_file():
+        return [], [_path_key(experiment_config_path)]
     config = json.loads(experiment_config_path.read_text(encoding="utf-8"))
-    adapter_files: dict[str, str | None] = {}
-    seen_paths = set()
+    adapter_paths: list[Path] = []
+    missing: list[str] = []
+    seen: set[Path] = set()
     for condition in config.get("conditions", []):
         adapter = condition.get("adapter_path")
-        if not condition.get("use_lora") or not adapter or adapter in seen_paths:
+        if not condition.get("use_lora") or not adapter:
             continue
-        seen_paths.add(adapter)
         adapter_path = Path(adapter)
         if not adapter_path.is_absolute():
             adapter_path = ROOT / adapter_path
-        for name in ("adapter_model.safetensors", "adapter_config.json", "training_manifest.json"):
-            path = adapter_path / name
-            key = str(path.relative_to(ROOT)).replace("\\", "/") if path.is_relative_to(ROOT) else str(path)
-            adapter_files[key] = sha256_file(path) if path.is_file() else None
-    return {
-        "experiment_config_sha256": sha256_file(experiment_config_path),
-        "adapter_files_sha256": dict(sorted(adapter_files.items())),
+        adapter_path = adapter_path.resolve()
+        if adapter_path in seen:
+            continue
+        seen.add(adapter_path)
+        if not adapter_path.is_dir():
+            missing.append(_path_key(adapter_path))
+            continue
+        runtime_files = sorted(
+            (
+                path
+                for path in adapter_path.rglob("*")
+                if path.is_file()
+                and path.name not in ADAPTER_FINGERPRINT_EXCLUDES
+                and not any(part.startswith("checkpoint-") for part in path.parts)
+            ),
+            key=lambda path: _path_key(path),
+        )
+        files_by_name = {path.name: path for path in runtime_files}
+        for required_name in sorted(REQUIRED_ADAPTER_FILES):
+            if required_name not in files_by_name:
+                missing.append(_path_key(adapter_path / required_name))
+        adapter_paths.extend(runtime_files)
+    return adapter_paths, missing
+
+
+def build_execution_contract(
+    *,
+    manifest_path: Path = DEFAULT_MANIFEST,
+    requests_path: Path = DEFAULT_REQUESTS,
+    experiment_config_path: Path = DEFAULT_EXPERIMENT_CONFIG,
+    eval_design_path: Path = DEFAULT_EVAL_DESIGN,
+    code_files: dict[str, Path] | None = None,
+) -> dict[str, Any]:
+    """Hash every frozen input and implementation file needed to reproduce a run."""
+    groups: dict[str, dict[str, dict[str, Any]]] = {
+        "configuration": {},
+        "data": {},
+        "adapter": {},
+        "code": {},
     }
+    missing: list[dict[str, str]] = []
+
+    def add_file(group: str, logical_name: str, path: Path) -> None:
+        path = Path(path)
+        key = _path_key(path)
+        if not path.is_file():
+            missing.append({"group": group, "logical_name": logical_name, "path": key})
+            return
+        groups[group][key] = {"logical_name": logical_name, **_file_entry(path)}
+
+    add_file("configuration", "experiment_config", experiment_config_path)
+    add_file("configuration", "pilot_manifest", manifest_path)
+    add_file("configuration", "evaluation_design", eval_design_path)
+    add_file("data", "evaluation_requests", requests_path)
+
+    adapter_paths, missing_adapters = _adapter_paths(Path(experiment_config_path))
+    for path in adapter_paths:
+        add_file("adapter", "adapter_runtime_artifact", path)
+    for path in missing_adapters:
+        missing.append({
+            "group": "adapter",
+            "logical_name": "adapter_directory_or_runtime_files",
+            "path": path,
+        })
+
+    for logical_name, path in (code_files or RUNTIME_CODE_FILES).items():
+        add_file("code", logical_name, Path(path))
+
+    canonical_payload = {
+        "schema_version": EXECUTION_CONTRACT_SCHEMA_VERSION,
+        "files": groups,
+        "missing_required_files": sorted(
+            missing, key=lambda item: (item["group"], item["logical_name"], item["path"])
+        ),
+    }
+    canonical = json.dumps(
+        canonical_payload,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return {
+        **canonical_payload,
+        "complete": not missing,
+        "aggregate_sha256": hashlib.sha256(canonical.encode("utf-8")).hexdigest(),
+    }
+
+
+def _contract_differences(
+    recorded: dict[str, Any], current: dict[str, Any]
+) -> list[str]:
+    differences: list[str] = []
+    if recorded.get("schema_version") != EXECUTION_CONTRACT_SCHEMA_VERSION:
+        differences.append("execution_contract.schema_version")
+    if not recorded.get("complete"):
+        differences.append("execution_contract.complete")
+    for group in ("configuration", "data", "adapter", "code"):
+        old_files = (recorded.get("files") or {}).get(group) or {}
+        new_files = (current.get("files") or {}).get(group) or {}
+        for path in sorted(set(old_files) | set(new_files)):
+            if path not in old_files:
+                differences.append(f"{group}:{path}:added")
+            elif path not in new_files:
+                differences.append(f"{group}:{path}:removed")
+            elif old_files[path] != new_files[path]:
+                differences.append(f"{group}:{path}:changed")
+    if recorded.get("missing_required_files") != current.get("missing_required_files"):
+        differences.append("execution_contract.missing_required_files")
+    if recorded.get("aggregate_sha256") != current.get("aggregate_sha256"):
+        differences.append("execution_contract.aggregate_sha256")
+    return differences
 
 
 def build_pilot_report(
@@ -355,9 +513,10 @@ def build_pilot_report(
     manifest: dict[str, Any],
     *,
     manifest_path: Path = DEFAULT_MANIFEST,
-    requests_path: Path | None = None,
+    requests_path: Path = DEFAULT_REQUESTS,
     experiment_config_path: Path = DEFAULT_EXPERIMENT_CONFIG,
     eval_design_path: Path = DEFAULT_EVAL_DESIGN,
+    code_files: dict[str, Path] | None = None,
 ) -> dict[str, Any]:
     conditions = manifest["required_conditions"]
     selected_ids = manifest["selection"]["selected_prompt_ids"]
@@ -387,9 +546,24 @@ def build_pilot_report(
                 "operator": "==",
                 "threshold": expected_ids,
             })
-    fingerprint = artifact_fingerprint(experiment_config_path)
+    execution_contract = build_execution_contract(
+        manifest_path=manifest_path,
+        requests_path=requests_path,
+        experiment_config_path=experiment_config_path,
+        eval_design_path=eval_design_path,
+        code_files=code_files,
+    )
+    if not execution_contract["complete"]:
+        decision = "no_go"
+        failures.append({
+            "condition": "SYSTEM",
+            "metric": "execution_contract_complete",
+            "observed": False,
+            "operator": "==",
+            "threshold": True,
+        })
     return {
-        "schema_version": "2.0",
+        "schema_version": REPORT_SCHEMA_VERSION,
         "pilot_id": manifest["pilot_id"],
         "evaluated_at": datetime.now(timezone.utc).isoformat(),
         "decision": decision,
@@ -398,12 +572,7 @@ def build_pilot_report(
         "sample_size_per_condition": manifest["sample_size_per_condition"],
         "selected_prompt_ids": selected_ids,
         "conditions": condition_metrics,
-        "fingerprint": {
-            "pilot_manifest_sha256": sha256_file(manifest_path),
-            "requests_sha256": sha256_file(requests_path) if requests_path else None,
-            "eval_design_sha256": sha256_file(eval_design_path),
-            **fingerprint,
-        },
+        "execution_contract": execution_contract,
         "metric_scope": {
             "automatic_factuality": "time markers plus citation/quote support; teacher review still required",
             "distractor_quality": "structural checks only; plausibility requires blinded teacher review",
@@ -417,20 +586,32 @@ def assert_full_run_allowed(
     requests_path: Path,
     experiment_config_path: Path = DEFAULT_EXPERIMENT_CONFIG,
     eval_design_path: Path = DEFAULT_EVAL_DESIGN,
+    *,
+    code_files: dict[str, Path] | None = None,
 ) -> None:
     if report.get("decision") != "go" or not report.get("full_experiment_allowed"):
         raise ValueError("Full experiment is blocked because the pilot decision is not GO")
-    current = {
-        "pilot_manifest_sha256": sha256_file(manifest_path),
-        "requests_sha256": sha256_file(requests_path),
-        "eval_design_sha256": sha256_file(eval_design_path),
-        **artifact_fingerprint(experiment_config_path),
-    }
-    recorded = report.get("fingerprint") or {}
-    mismatches = [key for key, value in current.items() if recorded.get(key) != value]
-    if mismatches:
+    if report.get("schema_version") != REPORT_SCHEMA_VERSION:
         raise ValueError(
-            "Full experiment is blocked because pilot artifacts changed: " + ", ".join(mismatches)
+            "Full experiment is blocked because the pilot report schema is stale; rerun the pilot"
+        )
+    recorded = report.get("execution_contract") or {}
+    if not recorded.get("complete"):
+        raise ValueError(
+            "Full experiment is blocked because the pilot execution contract is incomplete"
+        )
+    current = build_execution_contract(
+        manifest_path=manifest_path,
+        requests_path=requests_path,
+        experiment_config_path=experiment_config_path,
+        eval_design_path=eval_design_path,
+        code_files=code_files,
+    )
+    differences = _contract_differences(recorded, current)
+    if differences:
+        raise ValueError(
+            "Full experiment is blocked because the pilot execution contract changed: "
+            + ", ".join(differences)
         )
 
 
@@ -438,7 +619,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("results", type=Path)
     parser.add_argument("--manifest", type=Path, default=DEFAULT_MANIFEST)
-    parser.add_argument("--requests", type=Path)
+    parser.add_argument("--requests", type=Path, default=DEFAULT_REQUESTS)
     parser.add_argument("--experiment-config", type=Path, default=DEFAULT_EXPERIMENT_CONFIG)
     parser.add_argument("--eval-design", type=Path, default=DEFAULT_EVAL_DESIGN)
     parser.add_argument("--output", type=Path)

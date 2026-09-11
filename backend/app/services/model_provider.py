@@ -8,6 +8,8 @@ from pathlib import Path
 import time
 from typing import Protocol
 
+from .aqg_prompt import ChatMessage, serialize_chat_messages
+
 from app.core.config import get_settings
 
 
@@ -29,7 +31,7 @@ class GenerationOutput:
 
 
 class TextGenerationBackend(Protocol):
-    def generate(self, prompt: str, *, max_new_tokens: int, temperature: float, top_p: float) -> GenerationOutput:
+    def generate(self, messages: list[ChatMessage], *, max_new_tokens: int, temperature: float, top_p: float) -> GenerationOutput:
         ...
 
 
@@ -48,17 +50,11 @@ class OpenAICompatibleBackend:
         self.model_id = model_id or settings.ai_model
         self.client = OpenAI(api_key=api_key, base_url=settings.ai_base_url)
 
-    def generate(self, prompt: str, *, max_new_tokens: int, temperature: float, top_p: float) -> GenerationOutput:
+    def generate(self, messages: list[ChatMessage], *, max_new_tokens: int, temperature: float, top_p: float) -> GenerationOutput:
         started = time.perf_counter()
         response = self.client.chat.completions.create(
             model=self.model_id,
-            messages=[
-                {
-                    "role": "system",
-                    "content": "Bạn là hệ thống AQG môn Lịch sử 12. Chỉ trả về JSON hợp lệ.",
-                },
-                {"role": "user", "content": prompt},
-            ],
+            messages=messages,
             max_tokens=max_new_tokens,
             temperature=temperature,
             top_p=top_p,
@@ -131,15 +127,21 @@ class LocalTransformersBackend:
             self._model = PeftModel.from_pretrained(self._model, str(adapter))
         self._model.eval()
 
-    def generate(self, prompt: str, *, max_new_tokens: int, temperature: float, top_p: float) -> GenerationOutput:
+    def generate(self, messages: list[ChatMessage], *, max_new_tokens: int, temperature: float, top_p: float) -> GenerationOutput:
         self._load()
         torch = self._torch
         tokenizer = self._tokenizer
         model = self._model
         started = time.perf_counter()
+        prompt = serialize_chat_messages(tokenizer, messages)
         model_context = int(getattr(model.config, "max_position_embeddings", 2048))
         max_input_length = max(256, model_context - max_new_tokens)
-        inputs = tokenizer(prompt, return_tensors="pt", truncation=False)
+        inputs = tokenizer(
+            prompt,
+            return_tensors="pt",
+            truncation=False,
+            add_special_tokens=False,
+        )
         original_prompt_tokens = int(inputs["input_ids"].shape[1])
         input_truncated = original_prompt_tokens > max_input_length
         if input_truncated:

@@ -162,6 +162,26 @@ def favicon():
     return FileResponse(_root / "favicon.svg", media_type="image/svg+xml")
 
 
+@app.get("/assets/history12/page/{page_number}")
+def history12_page(page_number: int):
+    """Serve a reviewed textbook page image for source inspection."""
+    if not 1 <= page_number <= 200:
+        from fastapi import HTTPException
+        raise HTTPException(404, "Trang sách không hợp lệ")
+    page_path = (
+        _root / "outputs" / "cobraq_ocr_review" / "pages"
+        / f"page_{page_number:03d}.jpg"
+    )
+    if not page_path.is_file():
+        from fastapi import HTTPException
+        raise HTTPException(404, "Không có ảnh trang sách này")
+    return FileResponse(
+        page_path,
+        media_type="image/jpeg",
+        headers={"Cache-Control": "public, max-age=3600"},
+    )
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)

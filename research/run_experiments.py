@@ -15,7 +15,11 @@ for path in (ROOT, BACKEND):
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))
 
-from app.services.auto_exam_pipeline import AutoExamPipeline, AutoExamRequest  # noqa: E402
+from app.services.auto_exam_pipeline import (  # noqa: E402
+    AutoExamPipeline,
+    AutoExamRequest,
+    GenerationValidationError,
+)
 from research.evaluate_pilot import (  # noqa: E402
     DEFAULT_EXPERIMENT_CONFIG,
     DEFAULT_EVAL_DESIGN,
@@ -30,6 +34,18 @@ from research.evaluate_pilot import (  # noqa: E402
 def load_jsonl(path: Path) -> list[dict]:
     with path.open(encoding="utf-8") as stream:
         return [json.loads(line) for line in stream if line.strip()]
+
+
+def error_result_fields(error: Exception) -> dict:
+    """Serialize failures without confusing model validation with runtime errors."""
+    fields = {
+        "error_type": type(error).__name__,
+        "error": str(error),
+        "failure_stage": "runtime",
+    }
+    if isinstance(error, GenerationValidationError):
+        fields.update(error.telemetry)
+    return fields
 
 
 def main() -> int:
@@ -149,8 +165,7 @@ def main() -> int:
                         "request": record,
                         "condition": condition,
                         "status": "error",
-                        "error_type": type(error).__name__,
-                        "error": str(error),
+                        **error_result_fields(error),
                     }
                     if not (args.continue_on_error or args.phase in {"pilot", "full"}):
                         stream.write(json.dumps(row, ensure_ascii=False) + "\n")

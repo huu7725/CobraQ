@@ -140,10 +140,25 @@ Install GPU research dependencies and train:
 pip install -r requirements-research.txt
 python research/train_lora.py --train data/research/aqg_v2/approved/train.jsonl `
   --validation data/research/aqg_v2/approved/validation.jsonl `
-  --output artifacts/adapters/history12_lora_v2 --qlora `
-  --max-length 1792 --batch-size 1 --save-steps 10 `
+  --output artifacts/adapters/history12_lora_v2_1 --qlora `
+  --max-length 2048 --batch-size 1 --save-steps 10 `
   --resume-from-checkpoint auto
 ```
+
+AQG v2.1 uses `backend/app/services/aqg_prompt.py` as the only prompt builder
+for training, held-out verification, and runtime inference. Both training and
+local inference serialize the same `system`/`user` messages with the tokenizer's
+native chat template. MCQ and short-essay rules are separate, and C0/C2 omit the
+evidence section completely instead of inserting a fake context sentence. The
+prompt contract version and chat-template hash are written to `run_config.json`
+and the training manifest; v2 checkpoints cannot be resumed into v2.1.
+The C2/C3 experiment config now points to the v2.1 artifact, so pilot execution
+remains fail-closed until that artifact has been trained and fingerprinted.
+
+The completed v2.1 token audit covers all 480 train and 60 validation records.
+Combined total-token mean/p95/p99/max are 1,113.70 / 1,497 / 1,698 / 1,892;
+no record exceeds the 2,048-token training limit and no record is truncated. The
+machine-readable audit is `research/results/PROMPT_TOKEN_AUDIT_V2_1.json`.
 
 The training script stops when CUDA is unavailable unless `--allow-cpu` is used
 for a smoke test. The completed v2 QLoRA run used an RTX 3050 Ti Laptop GPU,
@@ -152,18 +167,21 @@ PyTorch VRAM. It finished 180 optimizer steps in 47 minutes 43 seconds; validati
 loss decreased from 0.2580 to 0.2285 and no input/target pair was truncated. Its
 manifest is `artifacts/adapters/history12_lora_v2/training_manifest.json`.
 
-Verify adapter loading and one held-out generation:
+After training v2.1, verify one deterministic batch while loading the model only
+once:
 
 ```powershell
-python research/verify_adapter.py --adapter artifacts/adapters/history12_lora_v2 `
-  --test data/research/aqg_v2/approved/test.jsonl --index 0 `
+python research/verify_adapter.py --adapter artifacts/adapters/history12_lora_v2_1 `
+  --test data/research/aqg_v2/approved/test.jsonl --count 10 `
   --max-new-tokens 1280
 ```
 
 The report is written to
-`artifacts/adapters/history12_lora_v2/verification_report.json`. A valid JSON result
-is necessary but not sufficient: schema, citation, factuality and teacher gates
-still apply.
+`artifacts/adapters/history12_lora_v2_1/verification_batch_report.json`. It stores
+raw/parsed output, strict runtime-schema status, latency, VRAM and truncation for
+every selected held-out item, plus aggregate JSON/schema rates. Use `--index N`
+for the old single-item behavior or `--indices 0,4,11` for a fixed custom batch.
+These checks do not approve historical factuality or pedagogy.
 
 ## 3. Run the gated C0-C3 pilot
 
@@ -186,8 +204,13 @@ lessons, and preserves a 7 MCQ / 3 short-essay mix. The runner writes:
 
 The report separates JSON validity from schema validity and includes automatic
 time-fact support, citation validity, structural distractor checks, p50/p95
-latency, throughput, input truncation and peak VRAM. These automatic checks do
-not replace factual and pedagogical review by teachers.
+latency, throughput, input truncation and peak VRAM. Raw output and telemetry are
+retained even when JSON/schema validation fails, so runtime metrics do not select
+only successful questions. The execution contract hashes the prompt builder,
+pipeline, model backend, strict schema, retrieval/trust code, evaluator, runner,
+configs, request set, and adapter runtime files. Any change invalidates an older
+GO report and requires a new pilot. These automatic checks do not replace factual
+and pedagogical review by teachers.
 
 Only after the pilot decision is `go`, run the registered 40 requests per
 condition:
@@ -238,6 +261,28 @@ python research/analyze_student_items.py path/to/student_responses.csv
 The report includes item difficulty, point-biserial discrimination, Cronbach's
 alpha, and a warning when the student sample is below 100.
 
+## 6. Independent teacher and retrieval review queues
+
+Build the 60-question independent review queue from the approved train and
+validation records, excluding the held-out test split:
+
+```powershell
+python research/build_review_queues.py
+```
+
+The CSV and Excel workbook are written to
+`outputs/cobraq_teacher_review_60/CobraQ_Independent_Review_60.xlsx`. The queue
+covers all 17 lessons with 42 multiple-choice and 18 short-essay items. Teacher
+ratings and decisions are intentionally blank. The `issue_flags` column marks
+repeated stems and the known essay answer placeholder for independent review.
+
+The same command creates the 51-row retrieval queue at
+`research/datasets/retrieval_gold.csv`. Review it in
+`outputs/retrieval_gold_review/Retrieval_Gold_Teacher_Review.xlsx`; fill
+`relevant_chunk_ids`, `reviewer_id`, `review_status=teacher_approved`, and
+`comment` only after reading the SGK evidence. Run `evaluate_retrieval.py` only
+after all rows have teacher-approved relevance labels.
+
 Capture the exact runtime before training/evaluation:
 
 ```powershell
@@ -255,7 +300,7 @@ Set these environment variables for local SLM deployment:
 
 - `COBRAQ_MODEL_BACKEND=local`
 - `COBRAQ_BASE_MODEL=TinyLlama/TinyLlama-1.1B-Chat-v1.0`
-- `COBRAQ_ADAPTER_PATH=artifacts/adapters/history12_lora_v2`
+- `COBRAQ_ADAPTER_PATH=artifacts/adapters/history12_lora_v2_1`
 - `COBRAQ_CORPUS_DIR=data/research/history12_kntt`
 
 The API backend is retained only as a development/reference baseline. Research

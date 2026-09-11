@@ -1,0 +1,245 @@
+{
+  "schema_version": "1.0",
+  "prompt_contract_version": "2.1",
+  "base_model": "TinyLlama/TinyLlama-1.1B-Chat-v1.0",
+  "train_file": "C:\\Users\\TUF\\Desktop\\CobraQ\\data\\research\\aqg_v2\\approved\\train.jsonl",
+  "validation_file": "C:\\Users\\TUF\\Desktop\\CobraQ\\data\\research\\aqg_v2\\approved\\validation.jsonl",
+  "train_file_sha256": "67bfbd812feff97ec7794cd2fc36b7b1ce40728802338122a65729789fd32c14",
+  "validation_file_sha256": "e0fce694d56f174ed38b24b51d5c01519df8d8383babc892866c3f61bde591c8",
+  "prompt_template_sha256": "1215220074f6824e0d421f0e14db2ea20710341c1db9bf2ac748dc0308f0aa1f",
+  "chat_template_sha256": "66291cf0045c2425a3a667cf3cbb7af2b11f09e025c02f97245323ab79119362",
+  "max_length": 2048,
+  "splits": {
+    "train": {
+      "prompt": {
+        "count": 480,
+        "min": 497,
+        "mean": 585.04,
+        "median": 581.0,
+        "p95": 662,
+        "p99": 719,
+        "max": 748
+      },
+      "response": {
+        "count": 480,
+        "min": 242,
+        "mean": 528.15,
+        "median": 500.0,
+        "p95": 863,
+        "p99": 1001,
+        "max": 1144
+      },
+      "total": {
+        "count": 480,
+        "min": 748,
+        "mean": 1113.19,
+        "median": 1077.5,
+        "p95": 1497,
+        "p99": 1692,
+        "max": 1892
+      }
+    },
+    "validation": {
+      "prompt": {
+        "count": 60,
+        "min": 519,
+        "mean": 592.43,
+        "median": 587.0,
+        "p95": 677,
+        "p99": 683,
+        "max": 691
+      },
+      "response": {
+        "count": 60,
+        "min": 243,
+        "mean": 525.35,
+        "median": 497.0,
+        "p95": 836,
+        "p99": 898,
+        "max": 1117
+      },
+      "total": {
+        "count": 60,
+        "min": 762,
+        "mean": 1117.78,
+        "median": 1071.0,
+        "p95": 1478,
+        "p99": 1557,
+        "max": 1808
+      }
+    },
+    "combined": {
+      "prompt": {
+        "count": 540,
+        "min": 497,
+        "mean": 585.86,
+        "median": 581.0,
+        "p95": 664,
+        "p99": 719,
+        "max": 748
+      },
+      "response": {
+        "count": 540,
+        "min": 242,
+        "mean": 527.84,
+        "median": 500.0,
+        "p95": 863,
+        "p99": 1028,
+        "max": 1144
+      },
+      "total": {
+        "count": 540,
+        "min": 748,
+        "mean": 1113.7,
+        "median": 1076.5,
+        "p95": 1497,
+        "p99": 1698,
+        "max": 1892
+      }
+    }
+  },
+  "oversized_examples": 0,
+  "truncated_examples": 0,
+  "longest_examples": [
+    {
+      "record_id": "aqg-v2-lesson_16-016",
+      "split": "train",
+      "prompt": 748,
+      "response": 1144,
+      "total": 1892
+    },
+    {
+      "record_id": "aqg-v2-lesson_15-019",
+      "split": "train",
+      "prompt": 735,
+      "response": 1097,
+      "total": 1832
+    },
+    {
+      "record_id": "aqg-v2-lesson_13-006",
+      "split": "train",
+      "prompt": 747,
+      "response": 1077,
+      "total": 1824
+    },
+    {
+      "record_id": "aqg-v2-lesson_04-008",
+      "split": "validation",
+      "prompt": 691,
+      "response": 1117,
+      "total": 1808
+    },
+    {
+      "record_id": "aqg-v2-lesson_11-023",
+      "split": "train",
+      "prompt": 723,
+      "response": 1047,
+      "total": 1770
+    },
+    {
+      "record_id": "aqg-v2-lesson_10-013",
+      "split": "train",
+      "prompt": 719,
+      "response": 979,
+      "total": 1698
+    },
+    {
+      "record_id": "aqg-v2-lesson_13-012",
+      "split": "train",
+      "prompt": 664,
+      "response": 1028,
+      "total": 1692
+    },
+    {
+      "record_id": "aqg-v2-lesson_13-009",
+      "split": "train",
+      "prompt": 679,
+      "response": 1001,
+      "total": 1680
+    },
+    {
+      "record_id": "aqg-v2-lesson_03-012",
+      "split": "train",
+      "prompt": 635,
+      "response": 986,
+      "total": 1621
+    },
+    {
+      "record_id": "aqg-v2-lesson_16-022",
+      "split": "train",
+      "prompt": 661,
+      "response": 940,
+      "total": 1601
+    },
+    {
+      "record_id": "aqg-v2-lesson_05-023",
+      "split": "train",
+      "prompt": 672,
+      "response": 918,
+      "total": 1590
+    },
+    {
+      "record_id": "aqg-v2-lesson_10-011",
+      "split": "train",
+      "prompt": 668,
+      "response": 912,
+      "total": 1580
+    },
+    {
+      "record_id": "aqg-v2-lesson_04-014",
+      "split": "train",
+      "prompt": 673,
+      "response": 903,
+      "total": 1576
+    },
+    {
+      "record_id": "aqg-v2-lesson_07-016",
+      "split": "validation",
+      "prompt": 659,
+      "response": 898,
+      "total": 1557
+    },
+    {
+      "record_id": "aqg-v2-lesson_13-017",
+      "split": "train",
+      "prompt": 640,
+      "response": 916,
+      "total": 1556
+    },
+    {
+      "record_id": "aqg-v2-lesson_15-016",
+      "split": "train",
+      "prompt": 669,
+      "response": 885,
+      "total": 1554
+    },
+    {
+      "record_id": "aqg-v2-lesson_04-007",
+      "split": "train",
+      "prompt": 651,
+      "response": 901,
+      "total": 1552
+    },
+    {
+      "record_id": "aqg-v2-lesson_08-022",
+      "split": "train",
+      "prompt": 652,
+      "response": 896,
+      "total": 1548
+    },
+    {
+      "record_id": "aqg-v2-lesson_02-009",
+      "split": "train",
+      "prompt": 659,
+      "response": 881,
+      "total": 1540
+    },
+    {
+      "record_id": "aqg-v2-lesson_04-006",
+      "split": "train",
+      "prompt": 635,
+      "response": 904,
+      "total": 1539
+    }
+  ]
+}

@@ -18,6 +18,7 @@ import json
 import os
 from pathlib import Path
 import random
+import statistics
 import sys
 import time
 
@@ -37,6 +38,16 @@ while SCRIPT_DIR in sys.path:
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+BACKEND = ROOT / "backend"
+if str(BACKEND) not in sys.path:
+    sys.path.insert(0, str(BACKEND))
+
+from app.services.aqg_prompt import (  # noqa: E402
+    PROMPT_CONTRACT_VERSION,
+    serialize_chat_messages,
+    training_messages,
+)
+
 
 def parse_args():
     parser = argparse.ArgumentParser(description=__doc__)
@@ -44,11 +55,25 @@ def parse_args():
     parser.add_argument("--validation", type=Path)
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     parser.add_argument("--model")
-    parser.add_argument("--output", type=Path, default=ROOT / "artifacts" / "adapters" / "history12_lora")
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default=ROOT / "artifacts" / "adapters" / "history12_lora_v2_1",
+    )
     parser.add_argument("--max-length", type=int, default=2048)
     parser.add_argument("--batch-size", type=int, default=1)
     parser.add_argument("--qlora", action="store_true")
     parser.add_argument("--allow-cpu", action="store_true")
+    parser.add_argument(
+        "--audit-only",
+        action="store_true",
+        help="Audit all selected prompt/response token lengths without loading the model.",
+    )
+    parser.add_argument(
+        "--audit-output",
+        type=Path,
+        default=ROOT / "research" / "results" / "PROMPT_TOKEN_AUDIT_V2_1.json",
+    )
     parser.add_argument("--max-train-examples", type=int)
     parser.add_argument("--max-validation-examples", type=int)
     parser.add_argument(
@@ -93,6 +118,26 @@ def records_sha256(records: list[dict]) -> str:
         separators=(",", ":"),
     )
     return sha256(payload.encode("utf-8")).hexdigest()
+
+
+def summarize_token_lengths(values: list[int]) -> dict[str, float | int]:
+    if not values:
+        return {"count": 0, "min": 0, "mean": 0.0, "median": 0.0, "p95": 0, "p99": 0, "max": 0}
+    ordered = sorted(values)
+
+    def percentile(quantile: float) -> int:
+        index = min(len(ordered) - 1, max(0, round((len(ordered) - 1) * quantile)))
+        return ordered[index]
+
+    return {
+        "count": len(values),
+        "min": min(values),
+        "mean": round(statistics.fmean(values), 2),
+        "median": round(statistics.median(values), 2),
+        "p95": percentile(0.95),
+        "p99": percentile(0.99),
+        "max": max(values),
+    }
 
 
 def validate_compact_payload(payload: object, location: str = "response") -> None:
@@ -153,19 +198,8 @@ def load_jsonl(path: Path) -> list[dict]:
     return records
 
 
-def format_prompt(record: dict) -> str:
-    context = (record.get("context") or "").strip()
-    context_block = f"\n### Ngữ liệu SGK\n{context}\n" if context else "\n"
-    return (
-        "Bạn là hệ thống sinh câu hỏi Lịch sử 12. Chỉ trả về JSON hợp lệ, "
-        "không thêm Markdown.\n"
-        f"### Yêu cầu\n{record['instruction'].strip()}\n"
-        "- JSON ngoài cùng chỉ có trường questions. Mỗi phần tử chỉ có "
-        "question_type, stem, choices, correct_answer, explanation.\n"
-        "- Không sinh question_id, lesson_id, difficulty, bloom_level, citations "
-        "hoặc generation_condition; máy chủ sẽ tự gắn các trường này.\n"
-        f"{context_block}### Trả lời\n"
-    )
+def format_prompt(record: dict, tokenizer) -> str:
+    return serialize_chat_messages(tokenizer, training_messages(record))
 
 
 def main() -> int:
@@ -192,18 +226,24 @@ def main() -> int:
 
     config = json.loads(args.config.read_text(encoding="utf-8"))
     shared = config["shared"]
+    configured_prompt_version = str(shared.get("prompt_contract_version") or "")
+    if configured_prompt_version != PROMPT_CONTRACT_VERSION:
+        raise ValueError(
+            "Training config prompt contract does not match the shared builder: "
+            f"{configured_prompt_version!r} != {PROMPT_CONTRACT_VERSION!r}"
+        )
     lora = shared["lora"]
     model_id = args.model or shared["base_model"]
     seed = int(shared["seed"])
     random.seed(seed)
     set_seed(seed)
 
-    if not torch.cuda.is_available() and not args.allow_cpu:
+    if not args.audit_only and not torch.cuda.is_available() and not args.allow_cpu:
         raise SystemExit(
             "CUDA GPU was not detected. LoRA training is intentionally stopped to avoid an "
             "impractically slow CPU run. Use --allow-cpu only for a smoke test."
         )
-    if args.qlora and not torch.cuda.is_available():
+    if not args.audit_only and args.qlora and not torch.cuda.is_available():
         raise SystemExit("QLoRA requires a CUDA-capable GPU in this training script")
 
     train_records = load_jsonl(args.train)
@@ -215,7 +255,13 @@ def main() -> int:
     if args.longest_first:
         def tokenized_length(record: dict) -> int:
             response = json.dumps(record["response"], ensure_ascii=False)
-            return len(tokenizer(format_prompt(record) + response, add_special_tokens=True)["input_ids"])
+            prompt_ids = tokenizer(
+                format_prompt(record, tokenizer), add_special_tokens=False
+            )["input_ids"]
+            response_ids = tokenizer(
+                response + tokenizer.eos_token, add_special_tokens=False
+            )["input_ids"]
+            return len(prompt_ids) + len(response_ids)
 
         train_records.sort(key=tokenized_length, reverse=True)
         validation_records.sort(key=tokenized_length, reverse=True)
@@ -226,23 +272,50 @@ def main() -> int:
     if not train_records:
         raise ValueError("No training examples remain after applying --max-train-examples")
 
+    prompt_examples = []
+    for question_type in ("multiple_choice", "short_essay"):
+        response = {
+            "questions": [{"question_type": question_type}]
+        }
+        prompt_examples.append(
+            format_prompt(
+                {"instruction": "__REQUEST__", "context": "__CONTEXT__", "response": response},
+                tokenizer,
+            )
+        )
     prompt_template_hash = sha256(
-        format_prompt({"instruction": "__REQUEST__", "context": "__CONTEXT__"}).encode("utf-8")
+        json.dumps(
+            {
+                "contract_version": PROMPT_CONTRACT_VERSION,
+                "chat_template": tokenizer.chat_template,
+                "prompts": prompt_examples,
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+        ).encode("utf-8")
     ).hexdigest()
 
-    def encoded_length(record: dict) -> int:
+    def encoded_lengths(record: dict) -> dict[str, int]:
         response = record["response"]
         if not isinstance(response, str):
             response = json.dumps(response, ensure_ascii=False)
-        prompt_ids = tokenizer(format_prompt(record), add_special_tokens=True)["input_ids"]
+        prompt_ids = tokenizer(
+            format_prompt(record, tokenizer), add_special_tokens=False
+        )["input_ids"]
         response_ids = tokenizer(
             response + tokenizer.eos_token,
             add_special_tokens=False,
         )["input_ids"]
-        return len(prompt_ids) + len(response_ids)
+        return {
+            "prompt": len(prompt_ids),
+            "response": len(response_ids),
+            "total": len(prompt_ids) + len(response_ids),
+        }
 
-    train_token_lengths = [encoded_length(record) for record in train_records]
-    validation_token_lengths = [encoded_length(record) for record in validation_records]
+    train_token_details = [encoded_lengths(record) for record in train_records]
+    validation_token_details = [encoded_lengths(record) for record in validation_records]
+    train_token_lengths = [item["total"] for item in train_token_details]
+    validation_token_lengths = [item["total"] for item in validation_token_details]
     oversized = [
         (record.get("sample_id") or record.get("record_id") or str(index), length)
         for index, (record, length) in enumerate(
@@ -251,22 +324,85 @@ def main() -> int:
         )
         if length > args.max_length
     ]
+    combined_details = train_token_details + validation_token_details
+    combined_records = train_records + validation_records
+    longest = sorted(
+        (
+            {
+                "record_id": record.get("sample_id") or record.get("record_id") or str(index),
+                "split": "train" if index <= len(train_records) else "validation",
+                **detail,
+            }
+            for index, (record, detail) in enumerate(
+                zip(combined_records, combined_details), start=1
+            )
+        ),
+        key=lambda item: item["total"],
+        reverse=True,
+    )[:20]
+    chat_template_hash = sha256(tokenizer.chat_template.encode("utf-8")).hexdigest()
+    token_audit = {
+        "schema_version": "1.0",
+        "prompt_contract_version": PROMPT_CONTRACT_VERSION,
+        "base_model": model_id,
+        "train_file": str(args.train.resolve()),
+        "validation_file": str(args.validation.resolve()) if args.validation else None,
+        "train_file_sha256": file_sha256(args.train),
+        "validation_file_sha256": file_sha256(args.validation) if args.validation else None,
+        "prompt_template_sha256": prompt_template_hash,
+        "chat_template_sha256": chat_template_hash,
+        "max_length": args.max_length,
+        "splits": {
+            "train": {
+                "prompt": summarize_token_lengths([item["prompt"] for item in train_token_details]),
+                "response": summarize_token_lengths([item["response"] for item in train_token_details]),
+                "total": summarize_token_lengths(train_token_lengths),
+            },
+            "validation": {
+                "prompt": summarize_token_lengths([item["prompt"] for item in validation_token_details]),
+                "response": summarize_token_lengths([item["response"] for item in validation_token_details]),
+                "total": summarize_token_lengths(validation_token_lengths),
+            },
+            "combined": {
+                "prompt": summarize_token_lengths([item["prompt"] for item in combined_details]),
+                "response": summarize_token_lengths([item["response"] for item in combined_details]),
+                "total": summarize_token_lengths([item["total"] for item in combined_details]),
+            },
+        },
+        "oversized_examples": len(oversized),
+        "truncated_examples": 0,
+        "longest_examples": longest,
+    }
+    args.audit_output.parent.mkdir(parents=True, exist_ok=True)
+    args.audit_output.write_text(
+        json.dumps(token_audit, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+        newline="\n",
+    )
     if oversized:
         preview = ", ".join(f"{record_id}={length}" for record_id, length in oversized[:10])
-        raise ValueError(
+        message = (
             f"{len(oversized)} examples exceed --max-length={args.max_length}; "
             f"refusing silent truncation. Longest examples: {preview}"
         )
+        if args.audit_only:
+            print(json.dumps(token_audit, ensure_ascii=False, indent=2))
+            print(message, file=sys.stderr)
+            return 2
+        raise ValueError(message)
+    if args.audit_only:
+        print(json.dumps(token_audit, ensure_ascii=False, indent=2))
+        return 0
 
     class AQGDataset(Dataset):
         def __init__(self, records: list[dict]):
             self.items = []
             for record in records:
-                prompt = format_prompt(record)
+                prompt = format_prompt(record, tokenizer)
                 response = record["response"]
                 if not isinstance(response, str):
                     response = json.dumps(response, ensure_ascii=False)
-                prompt_ids = tokenizer(prompt, add_special_tokens=True)["input_ids"]
+                prompt_ids = tokenizer(prompt, add_special_tokens=False)["input_ids"]
                 response_ids = tokenizer(response + tokenizer.eos_token, add_special_tokens=False)["input_ids"]
                 input_ids = prompt_ids + response_ids
                 if len(input_ids) > args.max_length:
@@ -336,6 +472,8 @@ def main() -> int:
         "selected_validation_records_sha256": records_sha256(validation_records),
         "experiment_config_sha256": file_sha256(args.config),
         "prompt_template_sha256": prompt_template_hash,
+        "prompt_contract_version": PROMPT_CONTRACT_VERSION,
+        "chat_template_sha256": chat_template_hash,
         "dataset_schema_version": train_records[0].get("schema_version", "1.0"),
         "max_length": args.max_length,
         "batch_size": args.batch_size,
@@ -436,6 +574,8 @@ def main() -> int:
         "validation_file_sha256": run_config["validation_file_sha256"],
         "experiment_config_sha256": run_config["experiment_config_sha256"],
         "prompt_template_sha256": prompt_template_hash,
+        "prompt_contract_version": PROMPT_CONTRACT_VERSION,
+        "chat_template_sha256": run_config["chat_template_sha256"],
         "token_length": {
             "train_max": max(train_token_lengths),
             "validation_max": max(validation_token_lengths) if validation_token_lengths else 0,

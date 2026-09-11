@@ -10,7 +10,7 @@ Sau khi deploy, mở URL được cấp bởi Render.com (vd `https://cobraq.onr
 
 ```
 CobraQ/
-├── CobraQ_v3.html              # Frontend (single-file, không cần build)
+├── CobraQ_v3.html              # Frontend thống nhất, phân quyền theo role
 ├── cobraq_v4_map_test.html     # Bản đồ lịch sử tương tác
 ├── favicon.svg
 ├── backend/                    # FastAPI + AI services
@@ -49,7 +49,7 @@ python -m venv venv
 pip install -r requirements.txt
 uvicorn app.main:app --reload --port 8000
 
-# Frontend: mở CobraQ_v3.html trong browser, hoặc truy cập http://localhost:8000
+# Frontend: truy cập http://127.0.0.1:8000
 ```
 
 ## 🛠 Tech stack
@@ -79,6 +79,9 @@ uvicorn app.main:app --reload --port 8000
 | POST | `/api/quiz/save` | Lưu kết quả làm bài |
 | GET | `/api/map/events` | Lấy danh sách sự kiện lịch sử |
 | GET | `/docs` | Swagger UI đầy đủ |
+
+Postman Collection có tại `postman/CobraQ.postman_collection.json`; xem hướng
+dẫn trong `POSTMAN_TESTING.md`.
 
 ## 🔒 Bảo mật
 

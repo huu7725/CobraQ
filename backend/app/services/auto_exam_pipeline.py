@@ -11,6 +11,7 @@ from typing import Any, Literal, Optional
 from pydantic import BaseModel, Field, ValidationError
 
 from app.core.config import get_settings
+from .aqg_prompt import PROMPT_CONTRACT_VERSION, ChatMessage, build_aqg_messages
 from .experiment_config import DEFAULT_PATH, ExperimentCondition, load_experiment_config
 from .model_provider import ModelBackendError, create_backend
 from .question_schema import GeneratedQuestion, ModelGenerationEnvelope, QuestionContent
@@ -29,12 +30,26 @@ class AutoExamRequest(BaseModel):
     model_backend: Optional[Literal["local", "api"]] = None
 
 
+class GenerationValidationError(ModelBackendError):
+    """The backend ran successfully, but every generated output failed validation."""
+
+    def __init__(self, message: str, telemetry: dict[str, Any]):
+        super().__init__(message)
+        self.telemetry = telemetry
+
+
 class AutoExamPipeline:
     def __init__(self, experiment_config_path: str | Path = DEFAULT_PATH):
         settings = get_settings()
         self.experiment_config_path = Path(experiment_config_path).resolve()
         config = load_experiment_config(self.experiment_config_path)
         shared = config["shared"]
+        configured_prompt_version = str(shared.get("prompt_contract_version") or "")
+        if configured_prompt_version != PROMPT_CONTRACT_VERSION:
+            raise ValueError(
+                "Experiment config prompt contract does not match runtime: "
+                f"{configured_prompt_version!r} != {PROMPT_CONTRACT_VERSION!r}"
+            )
         self.conditions = {
             item["id"]: ExperimentCondition(**item) for item in config["conditions"]
         }
@@ -82,22 +97,21 @@ class AutoExamPipeline:
         shortened = value[:max_chars].rsplit(" ", 1)[0].rstrip(" ,;:")
         return shortened or value[:max_chars]
 
-    def _prompt(self, request: AutoExamRequest, chunks: list[Chunk], use_rag: bool) -> str:
-        context = self._context(chunks) if use_rag else "Không cung cấp ngữ liệu truy xuất."
-        return f"""Bạn là hệ thống sinh câu hỏi Lịch sử 12. Chỉ trả về JSON hợp lệ, không thêm Markdown.
-### Yêu cầu
-Sinh đúng {request.num_questions} câu hỏi {request.question_type} cho {request.lesson_id}; độ khó {request.difficulty}/3, Bloom {request.bloom_level}.
-Mục tiêu bổ sung: {request.learning_objective or 'Không có'}.
-- Không bịa đặt ngày tháng, nhân vật, địa điểm hoặc quan hệ nguyên nhân-kết quả.
-- Trắc nghiệm phải có đúng bốn lựa chọn A/B/C/D và một đáp án đúng duy nhất.
-- Phương án nhiễu phải hợp lý nhưng không được vô tình đúng.
-- JSON ngoài cùng chỉ có trường questions. Mỗi phần tử chỉ có question_type, stem, choices, correct_answer, explanation.
-- Không sinh question_id, lesson_id, difficulty, bloom_level, citations hoặc generation_condition; máy chủ sẽ tự gắn các trường này.
-
-### Ngữ liệu SGK
-{context}
-### Trả lời
-"""
+    def _prompt(
+        self, request: AutoExamRequest, chunks: list[Chunk], use_rag: bool
+    ) -> list[ChatMessage]:
+        objective = request.learning_objective.strip()
+        instruction = (
+            f"Sinh đúng {request.num_questions} câu hỏi {request.question_type} cho "
+            f"{request.lesson_id}; độ khó {request.difficulty}/3, Bloom {request.bloom_level}."
+        )
+        if objective:
+            instruction += f" Mục tiêu học tập: {objective}."
+        return build_aqg_messages(
+            question_type=request.question_type,
+            instruction=instruction,
+            context=self._context(chunks) if use_rag else "",
+        )
 
     @staticmethod
     def _extract_json(text: str) -> dict[str, Any]:
@@ -198,6 +212,23 @@ Mục tiêu bổ sung: {request.learning_objective or 'Không có'}.
             }
         )
 
+    @staticmethod
+    def _retrieved_chunk_payload(
+        chunks: list[Chunk], exposed_chunks: list[Chunk]
+    ) -> list[dict[str, Any]]:
+        exposed_ids = {chunk.id for chunk in exposed_chunks}
+        return [
+            {
+                "chunk_id": chunk.id,
+                "page": chunk.page,
+                "score": round(chunk.score, 4),
+                "lesson_id": chunk.metadata.get("lesson_id", ""),
+                "text": chunk.text,
+                "exposed_to_model": chunk.id in exposed_ids,
+            }
+            for chunk in chunks
+        ]
+
     def generate(self, request: AutoExamRequest) -> dict[str, Any]:
         condition = self.conditions[request.condition_id]
         verification_chunks = self._retrieve(request)
@@ -223,14 +254,14 @@ Mục tiêu bổ sung: {request.learning_objective or 'Không có'}.
         backend = self._backends[backend_key]
         decoding = self.shared["decoding"]
         prompt = self._prompt(request, exposed_chunks, condition.use_rag)
-        max_attempts = int(self.shared.get("generation_max_attempts", 1))
+        max_attempts = max(1, int(self.shared.get("generation_max_attempts", 1)))
         total_latency_ms = 0
         total_prompt_tokens = 0
         total_completion_tokens = 0
         peak_vram_mb = 0.0
         original_prompt_tokens = 0
         input_truncated = False
-        last_error = ""
+        validation_attempts: list[dict[str, Any]] = []
         output = None
         question_models: list[GeneratedQuestion] = []
         for attempt in range(1, max_attempts + 1):
@@ -266,17 +297,57 @@ Mục tiêu bổ sung: {request.learning_objective or 'Không có'}.
                     for index, question in enumerate(envelope.questions, start=1)
                 ]
                 break
-            except (json.JSONDecodeError, ValidationError, ValueError, TypeError) as error:
-                preview = output.text[:200].replace("\n", " ")
-                last_error = (
-                    f"attempt {attempt}: {type(error).__name__}: {error}; "
-                    f"tokens={output.prompt_tokens}/{output.original_prompt_tokens} input, "
-                    f"{output.completion_tokens} output, truncated={output.input_truncated}; "
-                    f"output={preview!r}"
+            except (json.JSONDecodeError, ValidationError, ValueError) as error:
+                failure_stage = (
+                    "json_parse" if isinstance(error, json.JSONDecodeError)
+                    else "schema_validation"
+                )
+                validation_attempts.append(
+                    {
+                        "attempt": attempt,
+                        "failure_stage": failure_stage,
+                        "error_type": type(error).__name__,
+                        "error": str(error)[:4000],
+                        "raw_output": output.text,
+                        "latency_ms": output.latency_ms,
+                        "prompt_tokens": output.prompt_tokens,
+                        "completion_tokens": output.completion_tokens,
+                        "peak_vram_mb": output.peak_vram_mb,
+                        "original_prompt_tokens": output.original_prompt_tokens,
+                        "input_truncated": output.input_truncated,
+                    }
                 )
         else:
-            raise ModelBackendError(
-                f"Model failed JSON/schema validation after {max_attempts} attempts. {last_error}"
+            last_attempt = validation_attempts[-1]
+            telemetry = {
+                "failure_stage": last_attempt["failure_stage"],
+                "condition": condition.id,
+                "use_rag": condition.use_rag,
+                "use_lora": condition.use_lora,
+                "model_backend": backend_name,
+                "model_id": output.model_id if output is not None else "",
+                "adapter_id": output.adapter_id if output is not None else adapter,
+                "latency_ms": total_latency_ms,
+                "prompt_tokens": total_prompt_tokens,
+                "completion_tokens": total_completion_tokens,
+                "peak_vram_mb": peak_vram_mb,
+                "original_prompt_tokens": original_prompt_tokens,
+                "input_truncated": input_truncated,
+                "generation_attempts": len(validation_attempts),
+                "raw_output": last_attempt["raw_output"],
+                "validation_attempts": validation_attempts,
+                "retrieved_chunks": self._retrieved_chunk_payload(
+                    verification_chunks, exposed_chunks
+                ),
+                "questions": [],
+            }
+            last_summary = (
+                f"{last_attempt['error_type']}: {last_attempt['error']}"
+            )[:1200]
+            raise GenerationValidationError(
+                f"Model failed JSON/schema validation after {len(validation_attempts)} "
+                f"attempts. Last failure: {last_summary}",
+                telemetry,
             )
 
         assert output is not None
@@ -319,16 +390,8 @@ Mục tiêu bổ sung: {request.learning_objective or 'Không có'}.
             "original_prompt_tokens": original_prompt_tokens,
             "input_truncated": input_truncated,
             "generation_attempts": attempt,
-            "retrieved_chunks": [
-                {
-                    "chunk_id": chunk.id,
-                    "page": chunk.page,
-                    "score": round(chunk.score, 4),
-                    "lesson_id": chunk.metadata.get("lesson_id", ""),
-                    "text": chunk.text,
-                    "exposed_to_model": condition.use_rag,
-                }
-                for chunk in verification_chunks
-            ],
+            "retrieved_chunks": self._retrieved_chunk_payload(
+                verification_chunks, exposed_chunks
+            ),
             "questions": validated,
         }

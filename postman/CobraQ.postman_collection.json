@@ -1,0 +1,125 @@
+{
+  "info": {
+    "_postman_id": "1c9eef84-f3ab-44e7-bc54-cobraq-history12",
+    "name": "CobraQ - Lịch sử 12 API",
+    "description": "Bộ request kiểm thử local cho frontend học sinh, luyện tập từ câu giáo viên duyệt, tra cứu RAG và xác thực.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {"key": "base_url", "value": "http://127.0.0.1:8000"},
+    {"key": "token", "value": ""},
+    {"key": "practice_session_id", "value": ""}
+  ],
+  "item": [
+    {
+      "name": "01. Hệ thống",
+      "item": [
+        {
+          "name": "Health check",
+          "request": {"method": "GET", "header": [], "url": "{{base_url}}/health"},
+          "event": [{"listen": "test", "script": {"exec": ["pm.test('API hoạt động', function () { pm.response.to.have.status(200); pm.expect(pm.response.json().status).to.eql('ok'); });"]}}]
+        },
+        {
+          "name": "Thông tin cấu hình thực nghiệm",
+          "request": {"method": "GET", "header": [], "url": "{{base_url}}/api/research/config"}
+        },
+        {
+          "name": "Thống kê corpus",
+          "request": {"method": "GET", "header": [], "url": "{{base_url}}/api/research/corpus/stats"}
+        }
+      ]
+    },
+    {
+      "name": "02. Tài khoản",
+      "item": [
+        {
+          "name": "Đăng ký học sinh",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\n  \"email\": \"student12@example.com\",\n  \"name\": \"Học sinh lớp 12\",\n  \"password\": \"cobraq123\",\n  \"role\": \"student\"\n}"},
+            "url": "{{base_url}}/api/auth/register"
+          }
+        },
+        {
+          "name": "Đăng nhập và lưu JWT",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\n  \"email\": \"student12@example.com\",\n  \"password\": \"cobraq123\"\n}"},
+            "url": "{{base_url}}/api/auth/login"
+          },
+          "event": [{"listen": "test", "script": {"exec": ["pm.test('Đăng nhập thành công', function () { pm.response.to.have.status(200); });", "if (pm.response.code === 200) { pm.collectionVariables.set('token', pm.response.json().access_token); }"]}}]
+        },
+        {
+          "name": "Thông tin người dùng hiện tại",
+          "request": {"method": "GET", "header": [{"key": "Authorization", "value": "Bearer {{token}}", "type": "text"}], "url": "{{base_url}}/api/auth/me"}
+        }
+      ]
+    },
+    {
+      "name": "03. Luyện tập đã duyệt",
+      "item": [
+        {
+          "name": "Danh mục 17 bài",
+          "request": {"method": "GET", "header": [], "url": "{{base_url}}/api/research/practice/catalog"},
+          "event": [{"listen": "test", "script": {"exec": ["pm.test('Có dữ liệu held-out', function () { pm.response.to.have.status(200); const data=pm.response.json(); pm.expect(data.total_questions).to.be.above(0); pm.expect(data.lessons.length).to.eql(17); });"]}}]
+        },
+        {
+          "name": "Bắt đầu 5 câu trắc nghiệm",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\n  \"lesson_id\": null,\n  \"question_type\": \"multiple_choice\",\n  \"num_questions\": 5\n}"},
+            "url": "{{base_url}}/api/research/practice/start"
+          },
+          "event": [{"listen": "test", "script": {"exec": ["pm.test('Tạo phiên thành công', function () { pm.response.to.have.status(200); pm.expect(pm.response.json().questions.length).to.eql(5); });", "if (pm.response.code === 200) { pm.collectionVariables.set('practice_session_id', pm.response.json().session_id); }"]}}]
+        },
+        {
+          "name": "Nộp phiên luyện tập",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\n  \"session_id\": \"{{practice_session_id}}\",\n  \"answers\": {\n    \"1\": \"A\",\n    \"2\": \"A\",\n    \"3\": \"A\",\n    \"4\": \"A\",\n    \"5\": \"A\"\n  },\n  \"time_taken_seconds\": 60\n}"},
+            "url": "{{base_url}}/api/research/practice/submit"
+          },
+          "event": [{"listen": "test", "script": {"exec": ["pm.test('Nhận đáp án và citation', function () { pm.response.to.have.status(200); const data=pm.response.json(); pm.expect(data.details.length).to.eql(5); pm.expect(data.details[0]).to.have.property('explanation'); pm.expect(data.details[0]).to.have.property('citations'); });"]}}]
+        }
+      ]
+    },
+    {
+      "name": "04. Tra cứu SGK",
+      "item": [
+        {
+          "name": "Tìm Chiến dịch Điện Biên Phủ",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\n  \"query\": \"Chiến dịch Điện Biên Phủ năm 1954\",\n  \"lesson_id\": \"lesson_07\",\n  \"top_k\": 5,\n  \"mode\": \"hybrid\"\n}"},
+            "url": "{{base_url}}/api/research/search"
+          },
+          "event": [{"listen": "test", "script": {"exec": ["pm.test('Trả về nguồn SGK', function () { pm.response.to.have.status(200); const result=pm.response.json().results[0]; pm.expect(result).to.have.property('page'); pm.expect(result).to.have.property('chunk_id'); });"]}}]
+        },
+        {
+          "name": "Xem ảnh trang SGK 42",
+          "request": {"method": "GET", "header": [], "url": "{{base_url}}/assets/history12/page/42"}
+        }
+      ]
+    },
+    {
+      "name": "05. AQG thực nghiệm",
+      "description": "Chỉ dùng sau khi adapter v2.1 hoàn tất và pilot cho phép. Khi adapter chưa có, endpoint có thể trả 503.",
+      "item": [
+        {
+          "name": "Sinh câu C3 (sau khi adapter sẵn sàng)",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\n  \"condition_id\": \"C3\",\n  \"lesson_id\": \"lesson_07\",\n  \"question_type\": \"multiple_choice\",\n  \"difficulty\": 2,\n  \"bloom_level\": \"understand\",\n  \"num_questions\": 1,\n  \"learning_objective\": \"Chiến dịch Điện Biên Phủ\",\n  \"model_backend\": \"local\"\n}"},
+            "url": "{{base_url}}/api/research/generate"
+          }
+        }
+      ]
+    }
+  ]
+}

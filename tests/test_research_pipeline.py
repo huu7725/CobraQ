@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 import sys
 import tempfile
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
@@ -14,9 +15,20 @@ for path in (ROOT, BACKEND):
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))
 
-from app.services.experiment_config import get_condition, load_experiment_config
-from app.services.auto_exam_pipeline import AutoExamPipeline, AutoExamRequest
+from app.services.experiment_config import ExperimentCondition, get_condition, load_experiment_config
+from app.services.aqg_prompt import (
+    PROMPT_CONTRACT_VERSION,
+    build_aqg_messages,
+    serialize_chat_messages,
+    training_messages,
+)
+from app.services.auto_exam_pipeline import (
+    AutoExamPipeline,
+    AutoExamRequest,
+    GenerationValidationError,
+)
 from app.services.history_corpus import chunk_page_text, load_book_config, lookup_scope
+from app.services.model_provider import GenerationOutput
 from app.services.question_schema import GeneratedQuestion, ModelGenerationEnvelope, QuestionContent
 from app.services.trust_layer import Chunk, TrustLayer, extract_fact_markers
 from app.services.vector_service import VectorService
@@ -28,11 +40,114 @@ from research.build_aqg_candidates import build_targets
 from research.build_compact_aqg_dataset import TARGET_FIELDS, compact_record
 from research.finalize_aqg_dataset import assign_splits
 from research.prepare_ocr_review import classify
+from research.run_experiments import error_result_fields
 from research.score_teacher_rubric import score_row
 from research.train_lora import validate_compact_payload
 
 
 BOOK_CONFIG = ROOT / "research" / "configs" / "history12_kntt.json"
+
+
+class PromptBuilderTests(unittest.TestCase):
+    def test_mcq_and_essay_rules_are_separated(self):
+        mcq = build_aqg_messages(
+            question_type="multiple_choice",
+            instruction="Sinh một câu hỏi kiểm tra.",
+        )
+        essay = build_aqg_messages(
+            question_type="short_essay",
+            instruction="Sinh một câu hỏi kiểm tra.",
+        )
+        mcq_user = mcq[1]["content"]
+        essay_user = essay[1]["content"]
+
+        self.assertEqual(PROMPT_CONTRACT_VERSION, "2.1")
+        self.assertIn("MCQ: question_type=multiple_choice", mcq_user)
+        self.assertIn("correct_answer là một nhãn A-D", mcq_user)
+        self.assertNotIn("choices=[]", mcq_user)
+        self.assertIn("Tự luận: question_type=short_essay; choices=[]", essay_user)
+        self.assertNotIn("MCQ:", essay_user)
+
+    def test_non_rag_prompt_omits_fake_context(self):
+        messages = build_aqg_messages(
+            question_type="multiple_choice",
+            instruction="Sinh một câu hỏi kiểm tra.",
+            context="",
+        )
+        content = messages[1]["content"]
+        self.assertNotIn("Ngữ liệu SGK", content)
+        self.assertNotIn("Không cung cấp ngữ liệu truy xuất", content)
+
+    def test_rag_context_is_included_as_the_only_fact_source(self):
+        messages = build_aqg_messages(
+            question_type="short_essay",
+            instruction="Sinh một câu hỏi kiểm tra.",
+            context="Năm 1945, nước Việt Nam Dân chủ Cộng hòa ra đời.",
+        )
+        content = messages[1]["content"]
+        self.assertIn("nguồn dữ kiện duy nhất", content)
+        self.assertIn("Năm 1945", content)
+
+    def test_training_uses_the_same_message_builder(self):
+        record = {
+            "instruction": "Sinh một câu hỏi kiểm tra.",
+            "context": "Dữ kiện SGK đã duyệt.",
+            "response": {
+                "questions": [{"question_type": "short_essay"}],
+            },
+        }
+        self.assertEqual(
+            training_messages(record),
+            build_aqg_messages(
+                question_type="short_essay",
+                instruction=record["instruction"],
+                context=record["context"],
+            ),
+        )
+
+    def test_serializer_requires_and_calls_native_chat_template(self):
+        class FakeTokenizer:
+            chat_template = "native-template"
+
+            def __init__(self):
+                self.call = None
+
+            def apply_chat_template(self, messages, **kwargs):
+                self.call = (messages, kwargs)
+                return "<native-chat-prompt>"
+
+        tokenizer = FakeTokenizer()
+        messages = build_aqg_messages(
+            question_type="multiple_choice",
+            instruction="Sinh một câu hỏi kiểm tra.",
+        )
+        rendered = serialize_chat_messages(tokenizer, messages)
+        self.assertEqual(rendered, "<native-chat-prompt>")
+        self.assertEqual(tokenizer.call[0], messages)
+        self.assertEqual(
+            tokenizer.call[1],
+            {"tokenize": False, "add_generation_prompt": True},
+        )
+
+        tokenizer.chat_template = None
+        with self.assertRaisesRegex(ValueError, "no chat_template"):
+            serialize_chat_messages(tokenizer, messages)
+
+    def test_runtime_prompt_uses_shared_builder_and_no_fake_c0_context(self):
+        pipeline = AutoExamPipeline.__new__(AutoExamPipeline)
+        pipeline.shared = {"generation_context_max_chars": 300}
+        request = AutoExamRequest(
+            condition_id="C0",
+            lesson_id="lesson_01",
+            question_type="short_essay",
+            difficulty=3,
+            bloom_level="analyze",
+        )
+        messages = pipeline._prompt(request, [], False)
+        content = messages[1]["content"]
+        self.assertIn("Tự luận: question_type=short_essay", content)
+        self.assertNotIn("MCQ:", content)
+        self.assertNotIn("Không cung cấp ngữ liệu truy xuất", content)
 
 
 class HistoryCorpusTests(unittest.TestCase):
@@ -258,6 +373,88 @@ class FactualityTests(unittest.TestCase):
         )
         finalized = AutoExamPipeline._finalize_question(request, essay, [], False, 1)
         self.assertEqual(finalized.citations, [])
+
+    def test_failed_generation_retains_full_structured_telemetry(self):
+        raw_output = "Đầu ra không phải JSON\n" + ("nội dung đầy đủ " * 80)
+
+        class InvalidBackend:
+            def generate(self, *args, **kwargs):
+                return GenerationOutput(
+                    text=raw_output,
+                    model_id="tiny-test",
+                    adapter_id="adapter-test",
+                    latency_ms=125,
+                    prompt_tokens=80,
+                    completion_tokens=120,
+                    peak_vram_mb=512.5,
+                    original_prompt_tokens=90,
+                    input_truncated=True,
+                )
+
+        pipeline = AutoExamPipeline.__new__(AutoExamPipeline)
+        pipeline.conditions = {
+            "C0": ExperimentCondition(
+                id="C0",
+                name="Base SLM",
+                use_rag=False,
+                use_lora=False,
+                purpose="test",
+            )
+        }
+        pipeline.shared = {
+            "retrieval_top_k": 1,
+            "retrieval_mode": "hybrid",
+            "rerank_top_n": 1,
+            "generation_context_max_chars": 300,
+            "generation_max_attempts": 2,
+            "seed": 42,
+            "decoding": {"max_new_tokens": 128, "temperature": 0.0, "top_p": 1.0},
+        }
+        pipeline.settings = SimpleNamespace(
+            cobraq_model_backend="local",
+            cobraq_base_model="tiny-test",
+        )
+        pipeline._backends = {("local", "tiny-test", ""): InvalidBackend()}
+        pipeline._retrieve = lambda request: [
+            Chunk(
+                id="chunk-1",
+                text="Ngữ liệu lịch sử phục vụ kiểm thử telemetry.",
+                page=7,
+                score=0.9,
+                metadata={"lesson_id": "lesson_01"},
+            )
+        ]
+
+        with self.assertRaises(GenerationValidationError) as raised:
+            pipeline.generate(
+                AutoExamRequest(
+                    condition_id="C0",
+                    lesson_id="lesson_01",
+                    question_type="multiple_choice",
+                )
+            )
+
+        telemetry = raised.exception.telemetry
+        self.assertEqual(telemetry["raw_output"], raw_output)
+        self.assertEqual(telemetry["latency_ms"], 250)
+        self.assertEqual(telemetry["prompt_tokens"], 160)
+        self.assertEqual(telemetry["completion_tokens"], 240)
+        self.assertEqual(telemetry["peak_vram_mb"], 512.5)
+        self.assertEqual(telemetry["original_prompt_tokens"], 90)
+        self.assertTrue(telemetry["input_truncated"])
+        self.assertEqual(telemetry["generation_attempts"], 2)
+        self.assertEqual(len(telemetry["validation_attempts"]), 2)
+        self.assertEqual(telemetry["retrieved_chunks"][0]["chunk_id"], "chunk-1")
+
+        runner_fields = error_result_fields(raised.exception)
+        self.assertEqual(runner_fields["failure_stage"], "json_parse")
+        self.assertEqual(runner_fields["raw_output"], raw_output)
+
+    def test_runtime_errors_are_not_converted_to_validation_failures(self):
+        runtime_error = RuntimeError("CUDA out of memory")
+        fields = error_result_fields(runtime_error)
+        self.assertEqual(fields["failure_stage"], "runtime")
+        self.assertNotIn("raw_output", fields)
 
 
 class RetrievalMetricTests(unittest.TestCase):
