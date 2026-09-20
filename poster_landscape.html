@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<title>CobraQ Poster - Landscape Infographic</title>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800;900&family=Outfit:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+<style>﻿*{box-sizing:border-box;margin:0;padding:0}
+html,body{font-family:'Be Vietnam Pro',sans-serif;background:#0a0e1a}
+.poster{width:2247px;height:1589px;background:#e8eef5;position:relative;overflow:hidden;padding:30px 36px;display:flex;flex-direction:column;gap:18px}
+.top-bar{display:flex;align-items:center;justify-content:space-between;background:linear-gradient(90deg,#0f2942,#1e3a5f);border-radius:18px;padding:16px 32px;color:#fff}
+.top-left{display:flex;align-items:center;gap:22px}
+.logo-box{width:80px;height:80px;border-radius:18px;background:linear-gradient(135deg,#3b82f6,#1e40af);display:flex;align-items:center;justify-content:center;color:#fff;font-family:'Outfit',sans-serif;font-size:48px;font-weight:900;border:3px solid rgba(255,255,255,.2)}
+.title-block h1{font-family:'Outfit',sans-serif;font-size:68px;font-weight:900;letter-spacing:-1.5px;line-height:1;background:linear-gradient(90deg,#fff,#93c5fd);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.title-block .sub{font-size:19px;font-weight:600;color:#93c5fd;margin-top:5px}
+.top-right{display:flex;flex-direction:column;align-items:flex-end;gap:5px}
+.university{background:rgba(255,255,255,.1);border:1.5px solid rgba(255,255,255,.25);padding:7px 16px;border-radius:30px;font-size:14px;font-weight:700;color:#fff}
+.course{font-size:13px;font-weight:600;color:#bfdbfe}
+.main-grid{flex:1;display:grid;grid-template-columns:620px 1fr;gap:20px;min-height:0}
+.left-col,.right-col{display:flex;flex-direction:column;gap:16px;min-height:0}
+.panel{background:#fff;border-radius:18px;box-shadow:0 6px 18px rgba(15,41,66,.08);overflow:hidden;border:1.5px solid #e2e8f0}
+.panel-header{background:linear-gradient(90deg,#1e3a5f,#2d4f7c);color:#fff;padding:11px 20px;font-family:'Outfit',sans-serif;font-size:21px;font-weight:800;display:flex;align-items:center;gap:10px}
+.panel-header.green{background:linear-gradient(90deg,#065f46,#047857)}
+.panel-header.purple{background:linear-gradient(90deg,#5b21b6,#7c3aed)}
+.panel-header.amber{background:linear-gradient(90deg,#b45309,#d97706)}
+.panel-header.pink{background:linear-gradient(90deg,#9d174d,#be185d)}
+.panel-header.teal{background:linear-gradient(90deg,#0f766e,#0d9488)}
+.panel-body{padding:14px 20px}
+.intro-text{font-size:14.5px;line-height:1.55;color:#334155;text-align:justify;font-weight:500}
+.intro-text strong{color:#1e3a5f;font-weight:700}
+.team-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+.team-card{display:flex;align-items:center;gap:12px;background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:12px;padding:9px 12px}
+.team-avatar{width:46px;height:46px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-family:'Outfit',sans-serif;font-size:20px;font-weight:900;border:2.5px solid #fff;flex-shrink:0}
+.ta1{background:linear-gradient(135deg,#3b82f6,#1e40af)}
+.ta2{background:linear-gradient(135deg,#10b981,#047857)}
+.ta3{background:linear-gradient(135deg,#8b5cf6,#6d28d9)}
+.ta4{background:linear-gradient(135deg,#f59e0b,#b45309)}
+.ta5{background:linear-gradient(135deg,#ec4899,#9d174d)}
+.team-info{flex:1;min-width:0}
+.team-name{font-size:14px;font-weight:800;color:#1e3a5f;line-height:1.1;font-family:'Outfit',sans-serif}
+.team-major{font-size:11px;color:#475569;font-weight:600;margin-top:2px;line-height:1.2}
+.team-class{background:#1e3a5f;color:#fff;padding:2px 8px;border-radius:20px;font-size:10.5px;font-weight:800;flex-shrink:0;display:inline-block;margin-top:3px}
+.stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.stat-box{background:linear-gradient(135deg,#f1f5f9,#e2e8f0);border:2px solid #cbd5e1;border-radius:12px;padding:10px 6px;text-align:center}
+.stat-num{font-family:'Outfit',sans-serif;font-size:32px;font-weight:900;color:#1e3a5f;line-height:1}
+.stat-label{font-size:10.5px;font-weight:700;color:#475569;margin-top:4px;text-transform:uppercase;letter-spacing:.3px}
+.tech-strip{background:#fff;border-radius:18px;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 6px 18px rgba(15,41,66,.08);border:1.5px solid #e2e8f0;flex-wrap:wrap;gap:8px}
+.tech-label{font-family:'Outfit',sans-serif;font-size:14px;font-weight:800;color:#1e3a5f;white-space:nowrap;margin-right:6px}
+.tech-pills{display:flex;gap:6px;flex-wrap:wrap}
+.tech-pill{background:linear-gradient(135deg,#f1f5f9,#e2e8f0);border:1.5px solid #cbd5e1;color:#1e3a5f;padding:5px 11px;border-radius:20px;font-size:11.5px;font-weight:700}
+.features-body{padding:14px 20px 16px 20px;display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.feature-card{background:#f8fafc;border:1.5px solid #e2e8f0;border-left:5px solid #1e3a5f;border-radius:10px;padding:10px 12px}
+.feature-card.fc2{border-left-color:#047857}
+.feature-card.fc3{border-left-color:#7c3aed}
+.feature-card.fc4{border-left-color:#d97706}
+.feature-card.fc5{border-left-color:#be185d}
+.feature-card.fc6{border-left-color:#0d9488}
+.feature-head{display:flex;align-items:center;gap:8px;margin-bottom:5px}
+.feature-icon-small{width:28px;height:28px;border-radius:7px;background:#1e3a5f;color:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.feature-card.fc2 .feature-icon-small{background:#047857}
+.feature-card.fc3 .feature-icon-small{background:#7c3aed}
+.feature-card.fc4 .feature-icon-small{background:#d97706}
+.feature-card.fc5 .feature-icon-small{background:#be185d}
+.feature-card.fc6 .feature-icon-small{background:#0d9488}
+.feature-icon-small svg{width:15px;height:15px}
+.feature-title{font-family:'Outfit',sans-serif;font-size:15px;font-weight:800;color:#1e3a5f;line-height:1.1}
+.feature-desc{font-size:11.5px;color:#475569;line-height:1.35;font-weight:500}
+.workflow{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:14px 20px}
+.wf-step{flex:1;display:flex;flex-direction:column;align-items:center;text-align:center;background:#f8fafc;border:1.5px solid #cbd5e1;border-radius:10px;padding:10px 6px}
+.wf-num{width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,#1e3a5f,#3b82f6);color:#fff;font-family:'Outfit',sans-serif;font-size:18px;font-weight:900;display:flex;align-items:center;justify-content:center;margin-bottom:5px;box-shadow:0 4px 10px rgba(30,58,95,.3)}
+.wf-step.s2 .wf-num{background:linear-gradient(135deg,#065f46,#10b981)}
+.wf-step.s3 .wf-num{background:linear-gradient(135deg,#5b21b6,#a78bfa)}
+.wf-step.s4 .wf-num{background:linear-gradient(135deg,#b45309,#f59e0b)}
+.wf-step.s5 .wf-num{background:linear-gradient(135deg,#9d174d,#ec4899)}
+.wf-title{font-family:'Outfit',sans-serif;font-size:14px;font-weight:800;color:#1e3a5f;line-height:1.1}
+.wf-desc{font-size:10.5px;color:#475569;margin-top:2px;font-weight:500;line-height:1.25}
+.wf-arrow{color:#3b82f6;font-size:24px;font-weight:900;flex-shrink:0}
+.usecases-body{padding:14px 20px 16px 20px;display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.uc-card{background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:10px;padding:10px 8px;text-align:center}
+.uc-icon{width:42px;height:42px;border-radius:11px;background:linear-gradient(135deg,#1e3a5f,#3b82f6);color:#fff;display:flex;align-items:center;justify-content:center;margin:0 auto 6px;box-shadow:0 4px 10px rgba(30,58,95,.25)}
+.uc-icon svg{width:22px;height:22px}
+.uc-title{font-family:'Outfit',sans-serif;font-size:14px;font-weight:800;color:#1e3a5f;line-height:1.1}
+.uc-desc{font-size:10.5px;color:#475569;margin-top:3px;line-height:1.3;font-weight:500}
+.footer{background:linear-gradient(90deg,#0f2942,#1e3a5f);border-radius:18px;padding:14px 30px;color:#fff;display:flex;align-items:center;justify-content:space-between;box-shadow:0 8px 20px rgba(15,41,66,.25)}
+.footer-left{display:flex;align-items:center;gap:16px}
+.footer-logo{width:44px;height:44px;border-radius:11px;background:linear-gradient(135deg,#3b82f6,#1e40af);display:flex;align-items:center;justify-content:center;color:#fff;font-family:'Outfit',sans-serif;font-size:24px;font-weight:900;border:2px solid rgba(255,255,255,.2)}
+.footer-info{font-size:13px;line-height:1.45}
+.footer-info .l1{font-weight:700;color:#fff}
+.footer-info .l2{color:#bfdbfe;font-weight:500;font-size:12px}
+.footer-right{display:flex;gap:16px;align-items:center}
+.footer-stat{text-align:center;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.18);padding:6px 14px;border-radius:10px}
+.footer-stat .v{font-family:'Outfit',sans-serif;font-size:20px;font-weight:900;color:#fff;line-height:1}
+.footer-stat .k{font-size:10.5px;color:#bfdbfe;margin-top:2px;font-weight:600;letter-spacing:.4px;text-transform:uppercase}
+</style>
+</head>
+<body>
+<div class="poster" id="poster">
+<div class="top-bar">
+  <div class="top-left">
+    <div class="logo-box">C</div>
+    <div class="title-block">
+      <h1>CobraQ</h1>
+      <div class="sub">Hệ thống ôn tập trắc nghiệm thông minh • AI-Powered Learning Platform</div>
+    </div>
+  </div>
+  <div class="top-right">
+    <div class="university">🎓 Khoa Công Nghệ Thông Tin</div>
+    <div class="course">Đồ án tốt nghiệp 2026 • Triển lãm khoa học</div>
+  </div>
+</div>
+
+
+<div class="main-grid">
+
+  <div class="left-col">
+
+    <div class="panel">
+      <div class="panel-header">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+        GIỚI THIỆU DỰ ÁN
+      </div>
+      <div class="panel-body">
+        <p class="intro-text"><strong>CobraQ</strong> là hệ thống ôn tập trắc nghiệm ứng dụng <strong>trí tuệ nhân tạo</strong> dành cho học sinh Việt Nam. Cho phép upload tài liệu (PDF, DOCX, ảnh), tự động sinh câu hỏi, fill đáp án kèm giải thích, kết hợp <strong>bản đồ lịch sử tương tác</strong> với hơn 100 sự kiện Việt Nam. Hỗ trợ luyện tập, thi đua nhóm và đánh giá năng lực theo thời gian thực.</p>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-header pink">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        ĐỘI NGŨ PHÁT TRIỂN
+      </div>
+      <div class="panel-body">
+        <div class="team-grid">
+          <div class="team-card"><div class="team-avatar ta1">C</div><div class="team-info"><div class="team-name">Trần Ngọc Cường</div><div class="team-major">Kĩ Thuật Phần Mềm</div><div class="team-class">Lớp 47</div></div></div>
+          <div class="team-card"><div class="team-avatar ta2">K</div><div class="team-info"><div class="team-name">Võ Minh Khải</div><div class="team-major">Kĩ Thuật Phần Mềm</div><div class="team-class">Lớp 47</div></div></div>
+          <div class="team-card"><div class="team-avatar ta3">N</div><div class="team-info"><div class="team-name">Đào Khôi Nguyên</div><div class="team-major">Công Nghệ Thông Tin</div><div class="team-class">Lớp 47B</div></div></div>
+          <div class="team-card"><div class="team-avatar ta4">T</div><div class="team-info"><div class="team-name">Nguyễn Hữu Thuận</div><div class="team-major">Trí Tuệ Nhân Tạo</div><div class="team-class">Lớp 46</div></div></div>
+          <div class="team-card" style="grid-column:1/3"><div class="team-avatar ta5">L</div><div class="team-info"><div class="team-name">Lê Ngọc Lâm</div><div class="team-major">Công Nghệ Thông Tin</div><div class="team-class">Lớp 47C</div></div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header green">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        SỐ LIỆU NỔI BẬT
+      </div>
+      <div class="panel-body">
+        <div class="stats-grid">
+          <div class="stat-box"><div class="stat-num">8+</div><div class="stat-label">Tính năng AI</div></div>
+          <div class="stat-box"><div class="stat-num">100+</div><div class="stat-label">Sự kiện lịch sử</div></div>
+          <div class="stat-box"><div class="stat-num">4</div><div class="stat-label">Định dạng file</div></div>
+          <div class="stat-box"><div class="stat-num">∞</div><div class="stat-label">Câu hỏi tự sinh</div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="tech-strip">
+      <div class="tech-label">🛠 Tech Stack</div>
+      <div class="tech-pills">
+        <div class="tech-pill">Python 3.11</div>
+        <div class="tech-pill">FastAPI</div>
+        <div class="tech-pill">Claude AI</div>
+        <div class="tech-pill">ChromaDB</div>
+        <div class="tech-pill">Leaflet</div>
+        <div class="tech-pill">Tailwind</div>
+        <div class="tech-pill">Docker</div>
+        <div class="tech-pill">JWT</div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="right-col">
+
+    <div class="panel">
+      <div class="panel-header purple">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+        TÍNH NĂNG NỔI BẬT
+      </div>
+      <div class="features-body">
+        <div class="feature-card">
+          <div class="feature-head">
+            <div class="feature-icon-small"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></div>
+            <div class="feature-title">Upload đa định dạng</div>
+          </div>
+          <div class="feature-desc">PDF, DOCX, hình ảnh. Hỗ trợ OCR cho tài liệu scan.</div>
+        </div>
+        <div class="feature-card fc2">
+          <div class="feature-head">
+            <div class="feature-icon-small"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a10 10 0 1 0 10 10"/><path d="M12 6v6l4 2"/></svg></div>
+            <div class="feature-title">AI sinh câu hỏi</div>
+          </div>
+          <div class="feature-desc">Claude Sonnet tự động tạo câu trắc nghiệm + giải thích.</div>
+        </div>
+        <div class="feature-card fc3">
+          <div class="feature-head">
+            <div class="feature-icon-small"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/><line x1="9" y1="3" x2="9" y2="18"/><line x1="15" y1="6" x2="15" y2="21"/></svg></div>
+            <div class="feature-title">Bản đồ lịch sử</div>
+          </div>
+          <div class="feature-desc">Leaflet tương tác, marker cluster, popup video.</div>
+        </div>
+        <div class="feature-card fc4">
+          <div class="feature-head">
+            <div class="feature-icon-small"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div>
+            <div class="feature-title">Chấm điểm tự động</div>
+          </div>
+          <div class="feature-desc">Lưu lịch sử, đánh giá năng lực theo chủ đề.</div>
+        </div>
+        <div class="feature-card fc5">
+          <div class="feature-head">
+            <div class="feature-icon-small"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
+            <div class="feature-title">Nhóm học tập</div>
+          </div>
+          <div class="feature-desc">Tạo nhóm, chia sẻ tài liệu, thi đua xếp hạng.</div>
+        </div>
+        <div class="feature-card fc6">
+          <div class="feature-head">
+            <div class="feature-icon-small"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div>
+            <div class="feature-title">Bảo mật đa lớp</div>
+          </div>
+          <div class="feature-desc">JWT HS256, bcrypt, rate limit, XSS sanitization.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header teal">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+        QUY TRÌNH HOẠT ĐỘNG
+      </div>
+      <div class="workflow">
+        <div class="wf-step s1"><div class="wf-num">1</div><div class="wf-title">Upload</div><div class="wf-desc">Tài liệu PDF/DOCX</div></div>
+        <div class="wf-arrow">→</div>
+        <div class="wf-step s2"><div class="wf-num">2</div><div class="wf-title">AI xử lý</div><div class="wf-desc">Sinh câu + đáp án</div></div>
+        <div class="wf-arrow">→</div>
+        <div class="wf-step s3"><div class="wf-num">3</div><div class="wf-title">Luyện tập</div><div class="wf-desc">Trắc nghiệm + bản đồ</div></div>
+        <div class="wf-arrow">→</div>
+        <div class="wf-step s4"><div class="wf-num">4</div><div class="wf-title">Đánh giá</div><div class="wf-desc">Thống kê năng lực</div></div>
+        <div class="wf-arrow">→</div>
+        <div class="wf-step s5"><div class="wf-num">5</div><div class="wf-title">Thi đua</div><div class="wf-desc">Nhóm & xếp hạng</div></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header amber">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+        ĐỐI TƯỢNG SỬ DỤNG
+      </div>
+      <div class="usecases-body">
+        <div class="uc-card">
+          <div class="uc-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg></div>
+          <div class="uc-title">Học sinh THPT</div>
+          <div class="uc-desc">Ôn thi THPT Quốc gia các môn</div>
+        </div>
+        <div class="uc-card">
+          <div class="uc-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 14l9-5-9-5-9 5 9 5z"/><path d="M12 14l6.16-3.422a12.083 12.083 0 0 1 .665 6.479A11.952 11.952 0 0 0 12 20.055a11.952 11.952 0 0 0-6.824-2.998 12.078 12.078 0 0 1 .665-6.479L12 14z"/></svg></div>
+          <div class="uc-title">Sinh viên ĐH</div>
+          <div class="uc-desc">Luyện tập theo tài liệu giảng viên</div>
+        </div>
+        <div class="uc-card">
+          <div class="uc-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg></div>
+          <div class="uc-title">Giáo viên</div>
+          <div class="uc-desc">Tạo đề nhanh, quản lý nhóm lớp</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="footer">
+  <div class="footer-left">
+    <div class="footer-logo">C</div>
+    <div class="footer-info">
+      <div class="l1">🐍 CobraQ Team • Đồ án tốt nghiệp 2026</div>
+      <div class="l2">© 2026 Khoa Công Nghệ Thông Tin • Made with ❤️ in Vietnam • MIT License</div>
+    </div>
+  </div>
+  <div class="footer-right">
+    <div class="footer-stat"><div class="v">5</div><div class="k">Thành viên</div></div>
+    <div class="footer-stat"><div class="v">v3.0</div><div class="k">Production</div></div>
+    <div class="footer-stat"><div class="v">100%</div><div class="k">Open Source</div></div>
+  </div>
+</div>
+
+</div>
+
+</body>
+</html>

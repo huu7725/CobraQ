@@ -5,9 +5,9 @@ import json, random, re, os, base64, io, traceback
 from datetime import datetime
 from pathlib import Path
 
-# ══ CẤU HÌNH - THAY KEY VÀO ĐÂY ══
+
 ANTHROPIC_API_KEY = "YOUR_API_KEY_HERE"
-# ══════════════════════════════════
+
 
 app = FastAPI()
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])

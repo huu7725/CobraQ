@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from functools import lru_cache
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, UploadFile, File
 import json
 from pathlib import Path
 from pydantic import BaseModel, Field
@@ -29,10 +29,28 @@ class SearchRequest(BaseModel):
     mode: str = Field(default="hybrid", pattern="^(dense|keyword|hybrid)$")
 
 
+def _search_payload(query: str, lesson_id: str | None = None, top_k: int = 5, mode: str = "hybrid") -> dict:
+    chunks = pipeline().vector.search(
+        query, top_k=top_k, mode=mode,
+        filters={"lesson_id": lesson_id} if lesson_id else None,
+    )
+    results = [{
+        "chunk_id": chunk.id, "text": chunk.text, "source": chunk.source,
+        "page": chunk.page, "score": chunk.score, "metadata": chunk.metadata,
+    } for chunk in chunks]
+    related: list[str] = []
+    for item in results[:3]:
+        meta = item.get("metadata") or {}
+        for value in (meta.get("lesson_title"), meta.get("topic_title")):
+            if value and value not in related and value != query:
+                related.append(str(value))
+    return {"query": query, "results": results, "related_queries": related[:4]}
+
+
 class PracticeStartRequest(BaseModel):
     lesson_id: str | None = Field(default=None, pattern=r"^lesson_(?:0[1-9]|1[0-7])$")
-    question_type: Literal["multiple_choice", "short_essay"] = "multiple_choice"
-    num_questions: int = Field(default=5, ge=1, le=10)
+    question_type: Literal["multiple_choice", "short_essay", "mixed"] = "multiple_choice"
+    num_questions: int = Field(default=5, ge=1, le=60)
 
 
 class PracticeSubmitRequest(BaseModel):
@@ -102,15 +120,25 @@ def start_practice(body: PracticeStartRequest):
         question = record["response"]["questions"][0]
         if body.lesson_id and provenance.get("lesson_id") != body.lesson_id:
             continue
-        if question.get("question_type") != body.question_type:
+        if body.question_type != "mixed" and question.get("question_type") != body.question_type:
             continue
         candidates.append(record)
     if not candidates:
         raise HTTPException(404, "Không có câu hỏi đã duyệt phù hợp")
 
-    selected = random.SystemRandom().sample(
-        candidates, min(body.num_questions, len(candidates))
-    )
+    rng = random.SystemRandom()
+    sample_size = min(body.num_questions, len(candidates))
+    if body.question_type == "mixed" and sample_size >= 2:
+        mcq = [r for r in candidates if (r.get("response") or {}).get("questions", [{}])[0].get("question_type") == "multiple_choice"]
+        essays = [r for r in candidates if (r.get("response") or {}).get("questions", [{}])[0].get("question_type") == "short_essay"]
+        if mcq and essays:
+            selected = [rng.choice(mcq), rng.choice(essays)]
+            remaining = [r for r in candidates if r not in selected]
+            selected.extend(rng.sample(remaining, sample_size - 2))
+        else:
+            selected = rng.sample(candidates, sample_size)
+    else:
+        selected = rng.sample(candidates, sample_size)
     session_id = f"practice-{uuid4().hex}"
     session_questions = []
     public_questions = []
@@ -187,27 +215,31 @@ def corpus_stats():
 
 @router.post("/search")
 def search(body: SearchRequest):
-    service = pipeline().vector
-    chunks = service.search(
-        body.query,
-        top_k=body.top_k,
-        mode=body.mode,
-        filters={"lesson_id": body.lesson_id} if body.lesson_id else None,
-    )
-    return {
-        "query": body.query,
-        "results": [
-            {
-                "chunk_id": chunk.id,
-                "text": chunk.text,
-                "source": chunk.source,
-                "page": chunk.page,
-                "score": chunk.score,
-                "metadata": chunk.metadata,
-            }
-            for chunk in chunks
-        ],
-    }
+    return _search_payload(body.query, body.lesson_id, body.top_k, body.mode)
+
+
+@router.post("/search-image")
+async def search_image(file: UploadFile = File(...)):
+    """OCR a photographed textbook snippet, then retrieve matching SGK chunks."""
+    content_type = (file.content_type or "").lower()
+    if not content_type.startswith("image/"):
+        raise HTTPException(415, "Vui lòng chọn tệp hình ảnh")
+    data = await file.read()
+    if len(data) > 8 * 1024 * 1024:
+        raise HTTPException(413, "Ảnh quá lớn (tối đa 8 MB)")
+    try:
+        from io import BytesIO
+        from PIL import Image, ImageOps
+        import pytesseract
+        image = ImageOps.exif_transpose(Image.open(BytesIO(data)))
+        query = pytesseract.image_to_string(image, lang="vie+eng").strip()
+    except Exception as error:
+        raise HTTPException(503, "Chưa sẵn sàng OCR ảnh. Cài Tesseract và pytesseract rồi thử lại.") from error
+    if len(query) < 2:
+        raise HTTPException(422, "Không nhận diện được chữ trong ảnh")
+    result = _search_payload(query, top_k=5, mode="hybrid")
+    result["ocr_text"] = query
+    return result
 
 
 @router.post("/generate")
