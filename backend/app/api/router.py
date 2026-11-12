@@ -1,3 +1,4 @@
+from ..core.config import data_path, get_settings
 from fastapi import APIRouter, HTTPException, Header, Depends
 from fastapi.security import HTTPBearer
 import json, re
@@ -6,8 +7,8 @@ from pathlib import Path
 from pathlib import Path
 import os
 
-# Absolute path — avoid Path.resolve() case issues on Windows
-_DATA_ROOT = Path("D:/CobraQ/backend/data")
+# Resolve the data directory from the backend package on any machine.
+_DATA_ROOT = data_path()
 USERS_DIR = _DATA_ROOT / "users"
 from .auth import router as auth_router
 from .quiz import router as quiz_router
@@ -18,6 +19,8 @@ from .evaluation import router as evaluation_router
 from .users import router as users_router
 from .admin import router as admin_router
 from .groups import router as groups_router
+from .research import router as research_router
+from .documents import router as documents_router
 
 api_router = APIRouter()
 
@@ -30,6 +33,8 @@ api_router.include_router(evaluation_router)
 api_router.include_router(users_router)
 api_router.include_router(admin_router)
 api_router.include_router(groups_router)
+api_router.include_router(research_router)
+api_router.include_router(documents_router)
 
 
 # ── Stats endpoint (ghép từ main_updated.py) ──
@@ -73,8 +78,8 @@ def get_stats(x_user_id: str = Header(default="guest"),
             "total_sessions": 0,
             "avg_score": 0,
             "best_score": 0,
-            "ai_available": True,
-            "ai_enabled": True,
+            "ai_available": get_settings().cloud_ai_available,
+            "ai_enabled": get_settings().cloud_ai_available,
             "files": [
                 {"id": fid, "name": f.get("name", ""), "count": f.get("count", 0),
                  "with_answer": f.get("with_answer", 0), "uploaded_at": f.get("uploaded_at", ""),

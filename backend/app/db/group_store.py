@@ -1,3 +1,4 @@
+from ..core.config import data_path
 import json
 from pathlib import Path
 from typing import Optional
@@ -10,7 +11,7 @@ class GroupStore:
     Teachers create groups, get share codes, students join via codes.
     """
 
-    _path = Path("D:/CobraQ/backend/data/groups.json")
+    _path = data_path("groups.json")
 
     @classmethod
     def _ensure_dir(cls):

@@ -16,6 +16,7 @@ except ImportError:
     CHROMA_AVAILABLE = False
 
 from .trust_layer import Chunk
+from ..core.config import data_path, get_settings
 
 
 class VectorService:
@@ -26,11 +27,11 @@ class VectorService:
 
     def __init__(
         self,
-        persist_dir: str = "data/chroma_db",
+        persist_dir: str | None = None,
         collection_name: str = "cobraq_chunks",
         embedding_model: str = "all-MiniLM-L6-v2",
     ):
-        self.persist_dir = persist_dir
+        self.persist_dir = str(persist_dir or data_path("chroma_db"))
         self.collection_name = collection_name
         self.embedding_model = embedding_model
         self._client = None
@@ -38,11 +39,11 @@ class VectorService:
         self._use_chroma = False
         self._keyword_fallback: dict[str, list[Chunk]] = {}
 
-        if CHROMA_AVAILABLE:
+        if CHROMA_AVAILABLE and get_settings().vector_enabled:
             try:
-                Path(persist_dir).mkdir(parents=True, exist_ok=True)
+                Path(self.persist_dir).mkdir(parents=True, exist_ok=True)
                 self._client = chromadb.PersistentClient(
-                    path=persist_dir,
+                    path=self.persist_dir,
                     settings=ChromaSettings(anonymized_telemetry=False),
                 )
                 self._collection = self._client.get_or_create_collection(

@@ -1,14 +1,2 @@
-fastapi
-uvicorn[standard]
-python-multipart
-python-dotenv
-python-jose
-passlib
-bcrypt
-pydantic
-pydantic-settings
-email-validator
-slowapi
-httpx
-aiofiles
-asgiref
+# Install the complete application from the repository root.
+-r backend/requirements.txt

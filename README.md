@@ -1,8 +1,59 @@
 # CobraQ — Hệ thống Ôn tập Thông minh
 
+Luồng trích xuất Word/PDF/OCR chạy trên môi trường chính cổng 8000 bằng `start.bat`.
+Hỗ trợ lưu tài liệu gốc, đọc PDF scan cục bộ, trạng thái nền theo trang và nhận dạng
+câu hỏi/đáp án. Hướng dẫn đưa dữ liệu vào: [DOCUMENT_EXTRACTION.md](DOCUMENT_EXTRACTION.md).
+
+Môi trường thử nghiệm riêng: chạy `setup_sandbox.bat`, sau đó `start_sandbox.bat`
+để mở sandbox tại `http://127.0.0.1:8010`. Tài khoản và dữ liệu nằm trong `.sandbox`.
+Hướng dẫn môi trường, kiểm tra và container: [SANDBOX.md](SANDBOX.md).
+
+## Cập nhật nghiên cứu ngày 12/11/2026
+
+Đã nối giao diện **Luyện Lịch sử 12** và **Duyệt học liệu** với API nghiên cứu,
+thêm công cụ kiểm chứng adapter, đánh giá retrieval/NLP và phân tích pre/post.
+Trạng thái thực tế và các tài nguyên còn thiếu nằm trong [CURRENT_STATUS.md](CURRENT_STATUS.md);
+lệnh chạy và định dạng dữ liệu nằm trong [research/README.md](research/README.md).
+Workspace hiện có 199 đoạn nguồn, 60 câu nháp và 51 truy vấn chưa được giáo viên duyệt.
+Model/adapter và kết quả thực nghiệm trước chưa được khôi phục. Các mục roadmap
+bên dưới là ghi chép của phiên bản trước, không thay thế trạng thái hiện tại.
+
 ## Tổng quan
 
 Hệ thống quiz thông minh hỗ trợ học sinh ôn tập từ đề thi upload (Word/PDF), tích hợp AI để nhận dạng đáp án từ bảng tô màu và gia sư AI theo ngữ liệu.
+
+## Cài đặt và chạy trên Windows
+
+Môi trường sử dụng Python 3.12 (64-bit), thư viện được cài riêng trong `.venv`.
+Frontend là HTML/JavaScript thuần nên không cần cài thêm npm packages.
+
+```powershell
+.\setup.bat   # Tạo .venv và cài thư viện; có thể chạy lại khi cần
+.\start.bat   # Chạy backend hiện tại và phục vụ giao diện
+```
+
+Truy cập http://127.0.0.1:8000 để sử dụng ứng dụng, hoặc
+http://127.0.0.1:8000/docs để xem API. Nhấn `Ctrl+C` để dừng.
+`run.bat` cũng khởi động cùng backend từ thư mục `backend`, để nạp đúng
+`backend/.env` và dữ liệu trong `backend/data`.
+
+`setup.bat` tìm Python 3.12 đã cài trên máy, sau đó dùng Python đi kèm Codex
+nếu có. Khi có `requirements-lock.txt`, script cài đúng các phiên bản đã kiểm
+tra trên Windows/Python 3.12. Danh sách thư viện nguồn nằm trong
+`backend/requirements.txt`; tệp `requirements.txt` ở gốc dẫn tới danh sách này.
+
+Nếu chưa có `backend/.env`, script sao chép từ `backend/.env.example`.
+Điền `ANTHROPIC_API_KEY` hợp lệ để sử dụng các tính năng gọi Claude.
+`pdf2image` cần Poppler; `run.bat` tự thêm Poppler đi kèm Codex vào PATH
+nếu có. Với máy khác, cần cài Poppler và thêm thư mục chứa `pdfinfo.exe`,
+`pdftoppm.exe` vào PATH.
+
+Kiểm tra thư viện sau khi cài:
+
+```powershell
+.\.venv\Scripts\python.exe -m pip check
+.\.venv\Scripts\python.exe backend\check_deps.py
+```
 
 ## Kiến trúc hiện tại
 

@@ -5,6 +5,10 @@ from typing import Optional
 
 def _count_tokens(text: str) -> int:
     """Count tokens (word-level approximation, cross-platform)."""
+    from ..core.config import get_settings
+    if get_settings().profile == "sandbox":
+        # A conservative offline bound; avoids tiktoken downloading its encoding table.
+        return len(text.encode("utf-8"))
     try:
         import tiktoken
         enc = tiktoken.get_encoding("cl100k_base")

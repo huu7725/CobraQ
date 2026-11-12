@@ -1,0 +1,14 @@
+*
+!Dockerfile.sandbox
+!backend/
+!backend/app/
+!backend/app/**
+!backend/requirements-sandbox.txt
+!frontend/
+!frontend/**
+!tools/
+!tools/sandbox.py
+!CobraQ_v3.html
+!favicon.svg
+**/__pycache__
+**/*.pyc

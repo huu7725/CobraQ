@@ -1,13 +1,16 @@
 import sys
+import os
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 from app.core.security import hash_password
 from app.db.user_store import user_store
 from app.core.audit import audit_log, EventType
+from app.core.config import get_settings
 
-email = "admin@test.com"
-password = "admin123"
+settings = get_settings()
+email = os.getenv("ADMIN_EMAIL") or "admin@example.com"
+password = os.getenv("ADMIN_PASSWORD") or "admin123"
 name = "Admin"
 role = "admin"
 

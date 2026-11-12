@@ -1,3 +1,5 @@
+from ..core.storage import question_path
+from ..core.config import data_path
 from fastapi import APIRouter, Header, Depends, HTTPException, Request
 from pydantic import BaseModel
 from typing import Optional
@@ -25,7 +27,8 @@ RATE_LIMIT_PER_HOUR = 100   # Max tutoring requests per hour per user
 # ── Helpers ─────────────────────────────────────────────────────────────────
 
 def files_index_path(uid):
-    d = Path("data/users") / uid.replace("[^\w]", "_")
+    import re as _re
+    d = data_path("users") / _re.sub(r"[^\w]", "_", uid)
     return d / "files_index.json"
 
 
@@ -85,6 +88,8 @@ def call_claude_api(
     Gọi Claude API để generate tutoring response.
     Returns (response_text, error_message).
     """
+    if not get_settings().external_ai_enabled:
+        return "", "AI bên ngoài đã tắt trong môi trường này"
     try:
         import anthropic
     except ImportError:
@@ -177,7 +182,8 @@ def tutoring_chat(
     # Load & store chunks
     chunks: list[Chunk] = []
     if body.file_id:
-        q_file = Path("data/users") / uid.replace("[^\w]", "_") / f"{body.file_id}.json"
+        import re
+        q_file = question_path(data_path("users") / re.sub(r"[^\w]", "_", uid), body.file_id)
         if q_file.exists():
             questions = load_json(q_file, [])
             chunks = []
@@ -218,7 +224,7 @@ def tutoring_chat(
 
         # Call Claude API
         cfg = get_settings()
-        if cfg.anthropic_api_key and cfg.anthropic_api_key != "YOUR_KEY_HERE":
+        if cfg.cloud_ai_available:
             response_text, ai_error = call_claude_api(
                 query=query,
                 context=context,

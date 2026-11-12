@@ -1,0 +1,57 @@
+{
+  "bundle_sha256": "be24cd5c59461c25d42a259074ec442bdc81741d286ea528e744942a7db0ebe4",
+  "textbook_sha256": "26c8d32d86ed1cabd6d470724f533fbeccda5b2ff97a4bc20c200d4f2ec3cad0",
+  "textbook_pdf_pages": 116,
+  "book_page_offset": 2,
+  "chunks_recovered": 199,
+  "questions": 60,
+  "question_types": {
+    "multiple_choice": 42,
+    "short_answer": 18
+  },
+  "retrieval_queries": 51,
+  "approved": 0,
+  "note": "Recovered review drafts, NOT the lost 600 approved training examples or held-out set.",
+  "inputs": [
+    {
+      "member": "00_Huong_dan_giao_vien.pdf",
+      "sha256": "b21d7f871fa0a91fb91ddc3e8c47a951b3f4b76a66b9eb34d62b57459d13306e"
+    },
+    {
+      "member": "01_Duyet_cau_hoi_Tap_01.pdf",
+      "sha256": "2b81b6fd04c0195039e2ed00799fa1e144ac30ab363b97a2ebef362c9467f668"
+    },
+    {
+      "member": "01_Duyet_cau_hoi_Tap_02.pdf",
+      "sha256": "9a1cecdb64bdcf84a80b53cf127677394598f14e53cc4b675db37318f527c89a"
+    },
+    {
+      "member": "01_Duyet_cau_hoi_Tap_03.pdf",
+      "sha256": "210256cc370902275929baaff2dea245a7ef143bc98586e379208abd23cd4fda"
+    },
+    {
+      "member": "01_Duyet_cau_hoi_Tap_04.pdf",
+      "sha256": "c77240487e1648664aac798840739d326051cfced2d737c52f53cbc14e8d6a11"
+    },
+    {
+      "member": "01_Duyet_cau_hoi_Tap_05.pdf",
+      "sha256": "85def2d6185f35782c1df0aed68f2000abc9a0738fed38a49a20b9772007aa1e"
+    },
+    {
+      "member": "01_Duyet_cau_hoi_Tap_06.pdf",
+      "sha256": "2c01c7b43ce5856cb13d851ff60feba5aa53b4e29030a1530fdff84f3ce83ff9"
+    },
+    {
+      "member": "02_Xac_nhan_nguon_Tap_01.pdf",
+      "sha256": "d73b6fcabf07876e139342c1e8ead069667346cd8cc8cb7282b9b082e6540bfa"
+    },
+    {
+      "member": "02_Xac_nhan_nguon_Tap_02.pdf",
+      "sha256": "5f0087c678d3636d4b4b76a7229ef14e9bf1207f6871f2e7ab780fa1546ef051"
+    },
+    {
+      "member": "02_Xac_nhan_nguon_Tap_03.pdf",
+      "sha256": "0113f91ed6610d179c790a763ed36ff83907ab3262b75c8eba929b2d242e5b2b"
+    }
+  ]
+}

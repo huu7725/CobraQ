@@ -1,3 +1,4 @@
+from ..core.config import data_path
 import json
 from datetime import datetime
 from dataclasses import dataclass, field, asdict
@@ -34,7 +35,7 @@ class EvaluationLogger:
     Ghi log structured events để tính metrics.
     """
 
-    _log_path = Path("data/evaluation_logs.jsonl")
+    _log_path = data_path("evaluation_logs.jsonl")
 
     @classmethod
     def _ensure_dir(cls):
