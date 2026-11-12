@@ -1,5 +1,22 @@
 # Trạng thái CobraQ trong workspace hiện tại
 
+## Bản đồ nhiệm vụ Lịch sử 12
+
+Đã thêm đường dẫn trực tiếp `/mission-map`, khối nhiệm vụ nổi bật trên mọi trang
+chủ theo vai trò, link từ đăng nhập và nút mobile. Có chế độ xem thử công khai với
+phản hồi, không lưu lượt học sinh hay tự cấp phê duyệt; bài có lưu kết quả giữ quy
+trình giáo viên mở. Assets có mã phiên bản để tải đúng frontend mới.
+
+Đã bổ sung mô-đun riêng trong HTML chính, không dùng dữ liệu seed bản đồ cũ.
+Bản đầu có hai nhiệm vụ (Bài 7 và Bài 13), sáu mốc và bảy chứng cứ SGK: lọc theo
+thời gian/lớp sự kiện, xếp trình tự, chọn nguồn, nhận định và viết giải thích.
+Ba phần khách quan chấm tối đa 6 điểm; 4 điểm giải thích do giáo viên nhận xét.
+Cả hai nhiệm vụ vẫn là bản nháp chờ giáo viên đối chiếu và mở; không tự tạo phê duyệt.
+Lượt xem trước không được tính vào tiến độ học sinh. Có lưu tạm/tiếp tục, chấm theo
+lỗi, luyện lại, ảnh trang PDF có hash, kiểm tra quyền và quyết định duyệt theo hash.
+27 kiểm thử mới và kiểm tra API/DOM đã đạt. Chưa xác nhận trực quan bằng trình duyệt
+vì quyền mở origin 8000 đã bị từ chối; xem [MISSION_MAP.md](MISSION_MAP.md).
+
 ## Cập nhật trích xuất tài liệu trên môi trường chính
 
 Ngày 12/11/2026, luồng Word/PDF/OCR đã chạy trên `http://127.0.0.1:8000`,

@@ -1,5 +1,10 @@
 # CobraQ — Hệ thống Ôn tập Thông minh
 
+**Bản đồ nhiệm vụ Lịch sử 12:** mở mục cùng tên trong giao diện. Bản đầu có hai
+nhiệm vụ về Việt Bắc/Biên giới và Điện Biên Phủ/Giơ-ne-vơ, kết hợp thanh thời gian,
+chứng cứ SGK và giải thích do giáo viên nhận xét. Giáo viên xem trước, đối chiếu rồi
+mở cho học sinh. Hướng dẫn: [MISSION_MAP.md](MISSION_MAP.md).
+
 Luồng trích xuất Word/PDF/OCR chạy trên môi trường chính cổng 8000 bằng `start.bat`.
 Hỗ trợ lưu tài liệu gốc, đọc PDF scan cục bộ, trạng thái nền theo trang và nhận dạng
 câu hỏi/đáp án. Hướng dẫn đưa dữ liệu vào: [DOCUMENT_EXTRACTION.md](DOCUMENT_EXTRACTION.md).

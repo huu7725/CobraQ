@@ -2,6 +2,11 @@
 
 Frontend vẫn chạy HTML/JavaScript thuần, không cần build hoặc npm.
 
+- `mission_map.js`, `mission_map.css`: bản đồ nhiệm vụ lớp 12, lọc theo thời gian,
+  chứng cứ và bài giải thích; quy trình kiểm tra/mở nhiệm vụ và chấm giáo viên.
+- `vendor/leaflet`: Leaflet 1.9.4 cục bộ, kèm giấy phép; nền bản đồ tải từ
+  OpenStreetMap. Xem `../MISSION_MAP.md` để biết nguồn và phạm vi bản đầu.
+
 - `../CobraQ_v3.html`: màn hình đăng nhập, điều hướng, trang chủ theo vai trò,
   tài liệu, bài làm, kết quả và quản trị.
 - `ui.css`: kiểu chữ, màu, các thành phần chung và bố cục desktop/mobile.

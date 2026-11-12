@@ -292,7 +292,9 @@ body{background:var(--bg);overflow:hidden}
   .fi{min-width:0}.pt{font-size:20px}.qpm-body{flex-direction:column}
 }
 </style>
-<link rel="stylesheet" href="/assets/ui.css">
+<link rel="stylesheet" href="/assets/ui.css?v=20261112-missions-2">
+<link rel="stylesheet" href="/assets/vendor/leaflet/leaflet.css">
+<link rel="stylesheet" href="/assets/mission_map.css?v=20261112-missions-2">
 </head>
 <body>
 
@@ -318,6 +320,7 @@ body{background:var(--bg);overflow:hidden}
       <div class="fer" id="lerr"></div>
       <button class="ba" onclick="dl()">Đăng nhập</button>
       <div class="adiv">hoặc</div>
+      <a class="auth-mission-link" href="/mission-map">Xem thử nhiệm vụ Lịch sử 12</a>
       <button class="bso" onclick="dg2()"> &nbsp;Tiếp tục với tư cách khách</button>
     </div>
     <div class="asc" id="sc-register">
@@ -344,6 +347,7 @@ body{background:var(--bg);overflow:hidden}
     <div class="sbl"><div class="sblt">Cobra<span>Q</span></div><div class="brand-subtitle">Học liệu Lịch sử</div></div><button type="button" class="sidebar-close" aria-label="Đóng menu" onclick="closeNav()">×</button>
     <div class="sbs">MENU</div>
     <button type="button" class="sbi on" onclick="nv('dashboard')" id="n-dashboard">Trang chủ</button>
+    <button type="button" class="sbi mission-nav-link" id="n-mission-map" onclick="nv('mission-map')">Nhiệm vụ Lịch sử 12 <span>Mới</span></button>
     <button type="button" class="sbi" onclick="nv('quiz-start')" id="n-quiz-start">Làm bài</button>
     <button type="button" class="sbi" onclick="nv('history')" id="n-history">Lịch sử</button>
     <button type="button" class="sbi" onclick="nv('sgk')" id="n-sgk">Luyện Lịch sử 12</button>
@@ -380,7 +384,6 @@ body{background:var(--bg);overflow:hidden}
       <div class="sbs">THƯ VIỆN ĐỀ</div>
       <div id="sb-fl"></div>
     </div>
-    <button type="button" class="sbi" onclick="window.open('/map','_blank','noopener')">Bản đồ lịch sử</button>
     <div class="sbs">HỆ THỐNG</div>
     <button type="button" class="sbi" onclick="nv('settings')" id="n-settings">Cài đặt</button>
     <div class="sbot">
@@ -394,7 +397,7 @@ body{background:var(--bg);overflow:hidden}
   <button class="nav-scrim" aria-label="Đóng menu" onclick="closeNav()"></button>
   <nav class="mobile-nav" aria-label="Điều hướng nhanh">
     <button type="button" data-page="dashboard" onclick="nv('dashboard')">Tổng quan</button>
-    <button type="button" data-page="sgk" onclick="nv('sgk')">Học liệu</button>
+    <button type="button" data-page="mission-map" onclick="nv('mission-map')">Nhiệm vụ 12</button>
     <button type="button" data-page="quiz-start" onclick="nv('quiz-start')">Làm bài</button>
     <button type="button" id="mobile-menu" aria-expanded="false" onclick="toggleNav()"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>Menu</button>
   </nav>
@@ -560,12 +563,15 @@ body{background:var(--bg);overflow:hidden}
   </div>
 </div>
 
-<script src="/assets/documents.js"></script>
+<script src="/assets/vendor/leaflet/leaflet.js"></script>
+<script src="/assets/mission_map.js?v=20261112-missions-2"></script>
+<script src="/assets/documents.js?v=20261112-missions-2"></script>
 <script src="/research-ui.js"></script>
 <script>
 const API=location.protocol==="file:"?"http://127.0.0.1:8000/api":`${location.origin}/api`;
 const COLS=["c0","c1","c2","c3","c4","c5"],ICNS=["","","","","",""];
-const S={pg:"dashboard",user:null,nq:10,sid:null,qs:[],cur:0,ans:{},cm2:{},tl:0,ti:null,res:null,st:0,
+function requestedPage(){return ['/mission-map','/mission-map/'].includes(location.pathname)||location.hash==='#mission-map'?'mission-map':'dashboard';}
+const S={pg:requestedPage(),user:null,nq:10,sid:null,qs:[],cur:0,ans:{},cm2:{},tl:0,ti:null,res:null,st:0,
   stats:{total_questions:0,with_answer:0,total_sessions:0,avg_score:0,best_score:0,files:[],ai_available:false,ai_enabled:true},
   hist:[],an:localStorage.getItem("cq_an")==="true",sf:""};
 
@@ -640,6 +646,8 @@ function dr(){
 }
 function dg2(){ls({email:"guest@cobraq.vn",name:"Khách",role:"guest"});}
 function lo(){
+  if(typeof missionCanLeave==='function'&&!missionCanLeave())return;
+  if(typeof missionNavigateAway==='function')missionNavigateAway();MISSION.attempt=null;
   documentResetUploads();closeNav();clearInterval(S.ti);S.user=null;
   clearAuth();
   fetch(`${API}/auth/logout`,{method:"POST",headers:authHeaders()}).catch(()=>{});
@@ -652,7 +660,7 @@ function lo(){
 }
 function ls(u){
   documentResetUploads();clearTimeout(tst._t);$('tst').classList.remove('on');
-  S.user=u;S.pg='dashboard';S.sf='';S.qs=[];S.ans={};S.cm2={};S.sid=null;S.res=null;S.hist=[];
+  S.user=u;S.pg=requestedPage();S.sf='';S.qs=[];S.ans={};S.cm2={};S.sid=null;S.res=null;S.hist=[];
   S.stats={total_questions:0,with_answer:0,total_sessions:0,avg_score:0,best_score:0,files:[],ai_available:false,ai_enabled:false};
   if(typeof TUTOR!=='undefined'){TUTOR.history=[];TUTOR.fileId='';TUTOR.sessionId='';}
   $('main').innerHTML='<div class="page"><p class="ps" role="status">Đang tải không gian của bạn…</p></div>';
@@ -695,11 +703,13 @@ function selF(id){S.sf=S.sf===id?"":id;ubf();if(S.pg==="quiz-start"||S.pg==="upl
 let _pnav="",_pnavArg="";
 function isQuizIncomplete(){return S.pg==="quiz"&&S.qs&&S.qs.length>0&&Object.keys(S.ans).length<S.qs.length;}
 function nv(p){
+  if(typeof missionCanLeave==='function'&&!missionCanLeave())return;
   if(isQuizIncomplete()){
     _pnav='nv';_pnavArg=p;$('qwm-title').textContent='Thoát bài làm?';
     $('qwm-msg').textContent='Bạn chưa nộp bài. Kết quả của lượt làm này sẽ không được lưu.';
     $('qwm-go').textContent='Thoát bài làm';om('qwm');return;
   }
+  if(typeof missionNavigateAway==='function')missionNavigateAway();
   closeNav();S.pg=p;
   document.querySelectorAll('.sbi').forEach(el=>el.classList.remove('on'));
   $('n-'+p)?.classList.add('on');
@@ -715,6 +725,7 @@ function rp2(){
     dashboard:rd,"quiz-start":rqs,quiz:rqz,result:rrs,history:rht,
     upload:rup,settings:rset,
     sgk:rsgk,"research-review":rresearchReview,
+    "mission-map":missionRenderCatalog,"mission-progress":missionProgressPage,"mission-submissions":missionSubmissions,
     "admin-panel":radm,"admin-stats":rastats,"admin-audit":raudit,
     "eval-dash":reval,"all-files":rafl,"tutor-chat":rtutor,
     "my-groups":rgMyGroups,"create-group":rgCreateGroup,"join-group":rgJoinGroup,
@@ -764,10 +775,11 @@ function rd(m){
   const heroCopy=admin?'Theo dõi tài khoản, kiểm tra học liệu và quản lý hoạt động trong hệ thống.':teacher?'Tải đề, đối chiếu nguồn sách và duyệt câu hỏi trước khi giao cho học sinh.':'Chọn bài trong sách giáo khoa, đọc nguồn và tự kiểm tra kiến thức của mình.';
   const heroAction=admin?"nv('admin-panel')":teacher?"nv('research-review')":"nv('sgk')";
   const heroLabel=admin?'Quản lý tài khoản':teacher?'Duyệt học liệu':'Mở học liệu Lịch sử 12';
-  const tasks=admin?[["Tài khoản và phân quyền","admin-panel","Quản lý"],["Nhật ký hoạt động","admin-audit","Kiểm tra"],["Chất lượng hệ thống","eval-dash","Xem báo cáo"]]:teacher?[["Đối chiếu và duyệt học liệu","research-review","Kiểm tra"],["Lớp học của bạn","my-groups","Quản lý"],["Thêm đề từ tài liệu","upload","Tải lên"]]:[["Luyện tập theo bài SGK","sgk","17 bài học"],["Làm bài từ đề đã tải","quiz-start",`${files.length} đề`],["Tham gia lớp học","join-group","Nhập mã lớp"]];
+  const tasks=admin?[["Tài khoản và phân quyền","admin-panel","Quản lý"],["Nhật ký hoạt động","admin-audit","Kiểm tra"],["Chất lượng hệ thống","eval-dash","Xem báo cáo"]]:teacher?[["Đối chiếu và duyệt học liệu","research-review","Kiểm tra"],["Lớp học của bạn","my-groups","Quản lý"],["Thêm đề từ tài liệu","upload","Tải lên"]]:[["Nhiệm vụ trên bản đồ","mission-map","Lịch sử 12"],["Làm bài từ đề đã tải","quiz-start",`${files.length} đề`],["Tham gia lớp học","join-group","Nhập mã lớp"]];
   const recent=S.hist.slice(0,4).map(h=>{const file=files.find(f=>f.id===h.file_id);return `<div class="recent-row"><div><strong>${uiText(file?.name||'Bài ôn tập')}</strong><p>${uiText(uiDate(h.date))}</p></div><div class="recent-score">${Number(h.percent)||0}%<small>${Number(h.score)||0}/${Number(h.total)||0} câu đúng</small></div></div>`}).join('');
   const library=files.slice(0,3).map(f=>`<div class="library-row"><span class="library-type">ĐỀ</span><div><strong>${uiText(f.name)}</strong><small>${Number(f.count)||0} câu · ${Number(f.with_answer)||0} đáp án</small></div><button class="text-button" onclick="startF(this.dataset.file)" data-file="${uiText(f.id)}">Làm bài</button></div>`).join('');
   m.innerHTML=`<div class="page"><header class="dashboard-top"><div><div class="eyebrow">CobraQ / ${admin?'Quản trị':teacher?'Giáo viên':'Lịch sử 12'}</div><h1>${title}</h1><p>${hr()}, ${uiText(S.user?.name||'bạn')}.</p></div><div class="dashboard-actions"><button class="bo" onclick="nv('${admin?'admin-audit':teacher?'my-groups':'history'}')">${admin?'Nhật ký':teacher?'Lớp học của tôi':'Xem kết quả'}</button><button class="bp" onclick="nv('${admin?'admin-panel':teacher?'upload':'quiz-start'}')">${admin?'Quản lý tài khoản':teacher?'Tải đề mới':'Bắt đầu làm bài'}</button></div></header>
+  <section class="mission-launch-banner"><div><div class="eyebrow">Nhiệm vụ mới · Lịch sử 12</div><h2>Khám phá lịch sử trên bản đồ</h2><p>Xếp diễn biến, chọn chứng cứ SGK và thử giải thích mối liên hệ giữa các sự kiện.</p></div><a class="bp" href="/mission-map">Mở 2 nhiệm vụ mới ${uiIcon('arrow')}</a></section>
   <div class="dashboard-hero"><section class="study-feature"><div class="feature-meta"><span>${admin?'QUẢN LÝ HỆ THỐNG':teacher?'KHÔNG GIAN GIÁO VIÊN':'KHÔNG GIAN HỌC TẬP'}</span><span>LỊCH SỬ 12</span></div><h2>${heroTitle}</h2><p>${heroCopy}</p><button class="text-button" onclick="${heroAction}">${heroLabel} ${uiIcon('arrow')}</button><span class="feature-index" aria-hidden="true">12</span></section><section class="next-card"><div class="eyebrow">${teacher||admin?'Công việc của bạn':'Hôm nay bạn muốn'}</div><h2>${teacher||admin?'Học liệu sẵn sàng cho lớp học':'Chọn cách ôn tập phù hợp'}</h2><p>${teacher||admin?'Các thao tác thường dùng trong buổi làm việc.':'Bắt đầu từ nội dung bạn đang học trên lớp.'}</p><div class="next-links">${tasks.map(([label,page,note])=>`<button class="next-link" onclick="nv('${page}')"><span>${label}</span><span>${note}</span></button>`).join('')}</div></section></div>
   <section class="metrics-row" aria-label="Kết quả của tài khoản"><div class="metric"><div class="metric-label">Câu hỏi có sẵn</div><div class="metric-value">${Number(S.stats.total_questions)||0}</div><div class="metric-note">Trong ${files.length} đề đã tải</div></div><div class="metric"><div class="metric-label">Lượt làm bài</div><div class="metric-value">${S.hist.length}</div><div class="metric-note">Đã lưu trong lịch sử</div></div><div class="metric"><div class="metric-label">Độ chính xác</div><div class="metric-value">${accuracy===null?'—':accuracy+'%'}</div><div class="metric-note">${total?`${correct}/${total} câu trả lời đúng`:'Chưa có bài làm'}</div></div></section>
   <div class="dashboard-bottom"><section class="card"><div class="section-heading"><h2>Bài làm gần đây</h2><button class="text-button" onclick="nv('history')">Xem tất cả</button></div>${recent||'<div class="empty-state"><h3>Bắt đầu bài làm đầu tiên</h3><p>Kết quả sẽ xuất hiện tại đây sau khi bạn nộp bài.</p><button class="bo" onclick="nv(\'quiz-start\')">Chọn đề ôn tập</button></div>'}</section><section class="card"><div class="section-heading"><h2>Đề của bạn</h2><button class="text-button" onclick="nv('upload')">Quản lý đề</button></div>${library||'<div class="empty-state"><h3>Chưa có đề được tải lên</h3><p>Thêm tài liệu Word hoặc PDF để tạo bộ câu hỏi.</p><button class="bo" onclick="nv(\'upload\')">Tải tài liệu</button></div>'}</section></div></div>`;
@@ -1710,7 +1722,14 @@ async function viewGroupScores(code,file_id){
 
 
 
-(()=>{const u=getUser(),tk=getToken();if(u&&tk){fetch(`${API}/auth/me`,{headers:authHeaders()}).then(r=>r.json()).then(d=>{if(d.email&&d.email!=="guest"){S.user={email:d.email,name:d.name,role:d.role};setUser(S.user);}else{clearAuth();return;}$("aw").style.display="none";$("app").classList.add("on");$("app").inert=false;lst().then(()=>lh().then(rp2));uui();}).catch(()=>{clearAuth();});}else if(u){S.user=u;$("aw").style.display="none";$("app").classList.add("on");$("app").inert=false;lst().then(()=>lh().then(rp2));uui();}})();
+(()=>{
+  const direct=requestedPage()==='mission-map';
+  function show(user){S.user=user;S.pg=requestedPage();$('aw').style.display='none';$('app').classList.add('on');$('app').inert=false;uui();if(direct){rp2();lst();}else lst().then(()=>lh().then(rp2));}
+  const u=getUser(),tk=getToken();
+  if(u&&tk){fetch(`${API}/auth/me`,{headers:authHeaders()}).then(r=>r.json()).then(d=>{if(d.email&&d.email!=='guest'){const user={email:d.email,name:d.name,role:d.role};setUser(user);show(user);}else{clearAuth();if(direct)show({name:'Khách',role:'guest'});}}).catch(()=>{clearAuth();if(direct)show({name:'Khách',role:'guest'});});}
+  else if(u)show(u);
+  else if(direct)show({name:'Khách',role:'guest'});
+})();
 </script>
 </body>
 </html>

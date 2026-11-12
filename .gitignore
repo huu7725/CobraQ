@@ -99,3 +99,4 @@ backend/test_*.json
 !tools/tests/test_*.py
 !research/tests/test_*.py
 !research/verify_adapter_recovered.py
+!tests/test_mission_maps.py

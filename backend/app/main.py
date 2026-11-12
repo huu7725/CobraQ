@@ -60,6 +60,7 @@ app.include_router(api_router, prefix="/api")
 
 
 @app.get("/")
+@app.get("/mission-map", include_in_schema=False)
 def root():
     if FRONTEND_PATH.exists():
         if get_settings().profile == "sandbox":

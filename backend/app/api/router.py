@@ -23,6 +23,7 @@ from .research import router as research_router
 from .research_experiments import router as experiments_router
 from .map import router as map_router
 from .documents import router as documents_router
+from .mission_map import router as mission_map_router
 
 api_router = APIRouter()
 
@@ -39,6 +40,7 @@ api_router.include_router(research_router)
 api_router.include_router(experiments_router)
 api_router.include_router(map_router)
 api_router.include_router(documents_router)
+api_router.include_router(mission_map_router)
 
 
 # ── Stats endpoint (ghép từ main_updated.py) ──

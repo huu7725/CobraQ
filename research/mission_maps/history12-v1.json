@@ -1,0 +1,293 @@
+{
+  "schema_version": 1,
+  "id": "history12-missions-v1",
+  "title": "Bản đồ nhiệm vụ Lịch sử 12",
+  "edition": "Lịch sử 12 · Kết nối tri thức với cuộc sống, bản mẫu 10/2023",
+  "source_sha256": "26c8d32d86ed1cabd6d470724f533fbeccda5b2ff97a4bc20c200d4f2ec3cad0",
+  "source_filename": "history12_kntt_2023_sample.pdf",
+  "review_status": "draft",
+  "coordinate_note": "Các điểm phục vụ định hướng không gian học tập; không mô tả ranh giới lịch sử hoặc đường tiến quân. Tọa độ biên soạn cần giáo viên kiểm tra cùng nội dung.",
+  "events": [
+    {
+      "id": "e01",
+      "title": "Lời kêu gọi toàn quốc kháng chiến",
+      "date_start": "1946-12-19",
+      "date_end": "1946-12-19",
+      "date_label": "19/12/1946",
+      "precision": "day",
+      "latitude": 21.0285,
+      "longitude": 105.8542,
+      "place": "Hà Nội",
+      "location_note": "Điểm đại diện thành phố; không xác định địa điểm phát đi văn kiện.",
+      "kind": "political",
+      "source_ids": [
+        "s01"
+      ]
+    },
+    {
+      "id": "e02",
+      "title": "Chiến dịch Việt Bắc thu – đông 1947",
+      "date_start": "1947-10-01",
+      "date_end": "1947-12-31",
+      "date_label": "Tháng 10–12/1947",
+      "precision": "month_range",
+      "latitude": 22.15,
+      "longitude": 105.45,
+      "place": "Khu vực Việt Bắc",
+      "location_note": "Điểm đại diện vùng chiến dịch, không phải ranh giới hoặc vị trí tác chiến chính xác.",
+      "kind": "military",
+      "source_ids": [
+        "s02"
+      ]
+    },
+    {
+      "id": "e03",
+      "title": "Chiến dịch Biên giới thu – đông 1950",
+      "date_start": "1950-09-01",
+      "date_end": "1950-10-31",
+      "date_label": "Tháng 9–10/1950",
+      "precision": "month_range",
+      "latitude": 22.43,
+      "longitude": 106.43,
+      "place": "Khu vực Đông Khê – biên giới Việt–Trung",
+      "location_note": "Điểm định hướng theo khu vực Đông Khê được SGK nhắc tới; không mô phỏng tuyến tiến quân.",
+      "kind": "military",
+      "source_ids": [
+        "s03"
+      ]
+    },
+    {
+      "id": "e04",
+      "title": "Mở chiến dịch Điện Biên Phủ",
+      "date_start": "1954-03-13",
+      "date_end": "1954-03-13",
+      "date_label": "13/03/1954",
+      "precision": "day",
+      "latitude": 21.386,
+      "longitude": 103.016,
+      "place": "Điện Biên Phủ",
+      "location_note": "Điểm đại diện khu vực Điện Biên Phủ, không phải vị trí của một trận đánh cụ thể.",
+      "kind": "military",
+      "source_ids": [
+        "s04"
+      ]
+    },
+    {
+      "id": "e05",
+      "title": "Chiến thắng Điện Biên Phủ",
+      "date_start": "1954-05-07",
+      "date_end": "1954-05-07",
+      "date_label": "07/05/1954",
+      "precision": "day",
+      "latitude": 21.386,
+      "longitude": 103.016,
+      "place": "Điện Biên Phủ",
+      "location_note": "Điểm đại diện khu vực Điện Biên Phủ; hai mốc cùng nơi được nhóm trên bản đồ.",
+      "kind": "military",
+      "source_ids": [
+        "s04",
+        "s05"
+      ]
+    },
+    {
+      "id": "e06",
+      "title": "Kí Hiệp định Giơ-ne-vơ",
+      "date_start": "1954-07-21",
+      "date_end": "1954-07-21",
+      "date_label": "21/07/1954",
+      "precision": "day",
+      "latitude": 46.2044,
+      "longitude": 6.1432,
+      "place": "Giơ-ne-vơ, Thụy Sĩ",
+      "location_note": "Điểm đại diện thành phố, không xác định chính xác tòa nhà đàm phán.",
+      "kind": "diplomatic",
+      "source_ids": [
+        "s06"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "s01",
+      "title": "Những năm đầu kháng chiến toàn quốc",
+      "book_page": 39,
+      "pdf_page": 41,
+      "quote": "Sau khi thực dân Pháp và Chính phủ Trung Hoa Dân quốc kí Hiệp ước Hoa – Pháp (28 – 2 – 1946), Chủ tịch Hồ Chí Minh thay mặt Chính phủ Việt Nam Dân chủ Cộng hoà kí với Pháp Hiệp định Sơ bộ (6 – 3 – 1946). Mặc dù Chính phủ Việt Nam luôn tỏ rõ thiện chí hoà bình, nhưng thực dân Pháp luôn tìm cách phá hoại những điều đã kí kết, đẩy mạnh xâm lược cả nước ta. Trước tình hình đó, ngày 19 – 12 – 1946, Chủ tịch Hồ Chí Minh ra Lời kêu gọi toàn quốc kháng chiến.",
+      "quote_sha256": "ed9d9119fb135bbc871d62f4935a724b775e9f5f923bf229230a0e66d5c866a9",
+      "transcription": "draft_visual_checked",
+      "ocr_original": "Sau khi thực dân Pháp và Chính phủ Trung Hoa Dân quốc kí Hiệp ước\nHoa- Pháp (28 - 2 - 1946), Chủ tịch Hồ Chí Minh thay mặt Chính phủ Việt Nam Dân chủ\nCộng hoà kí với Pháp Hiệp định Sơ bộ (6 - 3 - 1946). Mặc dù Chính phủ Việt Nam\nuôn tỏ rõ thiện chí hoà bình, nhưng thực dân Pháp luôn tìm cách phá hoại những\ndiéu đã kí kết, đẩy mạnh xâm lược cả nước ta. Trước tình hình đó, ngày 19 - 12 - 1946,\nChủ tịch Hồ Chí Minh ra Lời kêu gợi toàn quốc kháng chiến.",
+      "excerpt_note": "Trích đoạn được biên tập từ trang gốc; đã bỏ phần không dùng, chờ giáo viên xác nhận."
+    },
+    {
+      "id": "s02",
+      "title": "Chiến dịch Việt Bắc thu – đông 1947",
+      "book_page": 40,
+      "pdf_page": 42,
+      "quote": "Chiến dịch Việt Bắc thu – đông năm 1947. Diễn ra từ tháng 10 đến tháng 12 – 1947 khi thực dân Pháp mở cuộc tấn công lên Việt Bắc. Quân đội Việt Nam chủ động bao vây, tiến công đẩy lùi quân Pháp khỏi một số vị trí quan trọng: Chợ Đồn, Chợ Rã, Đoan Hùng,… Ý nghĩa: Đây là chiến dịch phản công lớn đầu tiên, đã làm thất bại hoàn toàn chiến lược “đánh nhanh, thắng nhanh” của thực dân Pháp.",
+      "quote_sha256": "4c8562916150535286dcdbc7dde11999a831ff11a7a540947465462f44bbc45a",
+      "transcription": "draft_visual_checked",
+      "ocr_original": "- Diễn ra từ tháng 10 đến tháng 12 - 1947 khi thực dân Pháp\nmở cuộc tấn công lên Việt Bắc. Quân đội Việt Nam chủ động\nbao vây, tiến công đẩy lùi quân Pháp khỏi một số vị trí quan\ntrọng: Chợ Đồn, Chợ Ra, Doan Hùng,...\nChiến dịch Việt Bac | - Kết quả: Sau hai tháng, đại bộ phận quân Pháp phải rút chạy khỏi\nthu - đông năm 1947 | Việt Bắc; cơ quan đầu não của cuộc kháng chiến được bảo vệ an\ntoàn; bộ đội ta thu được nhiều vũ khí và ngày càng trưởng thành.\n- Ý nghĩa: Day là chiến dịch phản công lớn đầu tiên, đã làm\nthất bại hoàn toàn chiến lược “đánh nhanh, thắng nhanh” của\nthực dân Pháp.",
+      "excerpt_note": "Trích đoạn được biên tập từ trang gốc; đã bỏ phần không dùng, chờ giáo viên xác nhận."
+    },
+    {
+      "id": "s03",
+      "title": "Chiến dịch Biên giới thu – đông 1950",
+      "book_page": 40,
+      "pdf_page": 42,
+      "quote": "Chiến dịch Biên giới thu – đông năm 1950. Diễn ra từ tháng 9 đến tháng 10 – 1950 ở khu vực biên giới Việt – Trung. Quân đội Việt Nam tấn công cứ điểm Đông Khê, mai phục, chặn đánh quân Pháp ở nhiều nơi trên Đường số 4, buộc chúng phải rút chạy. Ý nghĩa: Đây là chiến dịch tiến công lớn đầu tiên của bộ đội chủ lực Việt Nam. Từ đây, quân đội Việt Nam đã giành được thế chủ động trên chiến trường chính (Bắc Bộ), mở ra bước phát triển mới của cuộc kháng chiến.",
+      "quote_sha256": "49f227e1aa6297b8d6b2b7e8e97af77c51b71232d4f35f174d09b0e173327edd",
+      "transcription": "draft_visual_checked",
+      "ocr_original": "- Diễn ra từ tháng 9 đến tháng 10 - 1950 ở khu vực biên giới\nViệt - Trung. Quân đội Việt Nam tấn công cứ điểm Đông Khê,\nmai phục, chặn đánh quân Pháp ở nhiều nơi trên Đường số 4,\nbuộc chúng phải rút chạy.\n~ Kết quả: Sau gần một tháng, quân ta đã giải phóng được khu\nChiến dịch Biên giới | vực biên giới rộng lớn, mở đường liên lạc quốc tế, bảo vệ được\nthu - đông năm 1950 | căn cứ địa Việt Bac, chọc thủng Hanh lang Đông - Tây, làm\nphá sản Kế hoạch Rơ-ve của Pháp.\n- Ý nghĩa: Đây là chiến dịch tiến công lớn đầu tiên của bộ đội\nchủ lực Việt Nam. Từ đây, quân đội Việt Nam đã giành được\nthế chủ động trên chiến trường chính (Bac Bộ), mở ra bước\nphát triển mới của cuộc kháng chiến.",
+      "excerpt_note": "Trích đoạn được biên tập từ trang gốc; đã bỏ phần không dùng, chờ giáo viên xác nhận."
+    },
+    {
+      "id": "s04",
+      "title": "Các mốc chiến dịch Điện Biên Phủ",
+      "book_page": 42,
+      "pdf_page": 44,
+      "quote": "Đầu tháng 12 – 1953, Bộ Chính trị Trung ương Đảng thông qua quyết định mở chiến dịch Điện Biên Phủ. Chiến dịch Điện Biên Phủ trải qua 56 ngày đêm (từ 13 – 3 – 1954 đến 7 – 5 – 1954) với ba đợt.",
+      "quote_sha256": "8e4b2312c656579e541c7d8c47a2125962e366a19628ef61759e7f50a0af94d0",
+      "transcription": "draft_visual_checked",
+      "ocr_original": "Đầu tháng 12 - 1953, Bộ Chính trị Trung ương Dang thông qua quyết định mở chiến\ndịch Điện Biên Phủ. Chiến dịch Điện Biên Phủ trải qua 56 ngày đêm (từ 13 - 3 - 1954 đến\n7-5 - 1954) với ba dot.",
+      "excerpt_note": "Trích đoạn được biên tập từ trang gốc; đã bỏ phần không dùng, chờ giáo viên xác nhận."
+    },
+    {
+      "id": "s05",
+      "title": "Liên hệ chiến trường và đàm phán",
+      "book_page": 42,
+      "pdf_page": 44,
+      "quote": "Thắng lợi ở Điện Biên Phủ đã tạo cơ sở cho việc đàm phán và kí kết Hiệp định Giơ-ne-vơ về chấm dứt chiến tranh, lập lại hoà bình ở Đông Dương (21 – 7 – 1954).",
+      "quote_sha256": "f21c50e07407aaa46a3e72563ad970f03780927a13dce97c34522d99cba80871",
+      "transcription": "draft_visual_checked",
+      "ocr_original": "Thắng lợi ở Điện Biên Phủ đã tạo cơ sở cho việc đàm phán và kí kết Hiệp định\nGiơ-ne-vơ về chấm dứt chiến tranh, lập lại hoà bình ở Đông Dương (21 - 7 - 1954).",
+      "excerpt_note": "Trích đoạn được biên tập từ trang gốc; đã bỏ phần không dùng, chờ giáo viên xác nhận."
+    },
+    {
+      "id": "s06",
+      "title": "Hoạt động ngoại giao tại Giơ-ne-vơ",
+      "book_page": 79,
+      "pdf_page": 81,
+      "quote": "Tháng 5 – 1954, Hội nghị quốc tế về Đông Dương được tổ chức ở Giơ-ne-vơ (Thuỵ Sĩ). Chính phủ Việt Nam Dân chủ Cộng hoà đã kiên trì đấu tranh bảo vệ các quyền dân tộc cơ bản của ba nước Đông Dương. Ngày 21 – 7 – 1954, Hiệp định Giơ-ne-vơ được kí kết. Đây là văn bản pháp lí quốc tế ghi nhận các quyền dân tộc cơ bản của nhân dân các nước Đông Dương.",
+      "quote_sha256": "104521b2752f25249a5ddc5dae2529551512b7d9882956c0a0c46f804e70f57d",
+      "transcription": "draft_visual_checked",
+      "ocr_original": "Tháng 5 - 1954, Hội nghị quốc tế về Đông Dương được tổ chức ở Giơ-ne-vơ\n(Thuy Sĩ). Chính phủ Việt Nam Dân chủ Cộng hoà đã kiên trì đấu tranh bảo vệ các\nquyển dân tộc cơ bản của ba nước Đông Dương. Ngày 21 - 7 - 1954, Hiệp định Giơ-ne-vơ\nđược kí kết. Day là văn bản pháp lí quốc tế ghi nhận các quyền dân tộc cơ bản của nhân\ndân các nước Đông Dương.",
+      "excerpt_note": "Trích đoạn được biên tập từ trang gốc; đã bỏ phần không dùng, chờ giáo viên xác nhận."
+    },
+    {
+      "id": "s07",
+      "title": "Bối cảnh quân sự 1953 – 1954",
+      "book_page": 41,
+      "pdf_page": 43,
+      "quote": "Được sự thoả thuận của Mỹ, tháng 7 – 1953, thực dân Pháp đề ra Kế hoạch Na-va với hi vọng trong vòng 18 tháng giành một thắng lợi quân sự quyết định để kết thúc chiến tranh trong danh dự. Cuộc Tiến công chiến lược Đông – Xuân 1953 – 1954 của quân dân Việt Nam đã làm phá sản bước đầu Kế hoạch Na-va, đồng thời chuẩn bị về vật chất và tinh thần để mở chiến dịch Điện Biên Phủ.",
+      "quote_sha256": "2bff80c380f7dc41f9b89d76c1548e3fd6e8d32422c551cb7e176e14569a7d21",
+      "transcription": "draft_visual_checked",
+      "ocr_original": "trong vòng 18 tháng giành một thắng lợi quân\nsự quyết định để kết thúc chiến tranh trong\ndanh dự.\nCuộc Tiến công chiến lược Đông - Xuân\n1953 - 1954 của quân dân Việt Nam đã làm\nphá sản bước đầu Kế hoạch Na-va, đồng thời\nchuẩn bị về vat chất và tinh than để mở chiến\ndịch Điện Biên Phủ.\nHình 4. Chủ tịch Hồ Chí Minh và Bộ Chính trị",
+      "excerpt_note": "Trích đoạn được biên tập từ trang gốc; đã bỏ phần không dùng, chờ giáo viên xác nhận."
+    }
+  ],
+  "missions": [
+    {
+      "id": "the-chu-dong-1950",
+      "title": "Bước chuyển trên chiến trường Bắc Bộ",
+      "lesson_ids": [
+        7
+      ],
+      "duration_minutes": 8,
+      "summary": "So sánh Việt Bắc 1947 và Biên giới 1950 từ trình tự đến ý nghĩa chiến dịch.",
+      "question": "Qua các nguồn, hãy phân biệt ý nghĩa của hai chiến dịch Việt Bắc 1947 và Biên giới 1950.",
+      "event_ids": [
+        "e01",
+        "e02",
+        "e03"
+      ],
+      "source_ids": [
+        "s01",
+        "s02",
+        "s03",
+        "s07"
+      ],
+      "sequence_prompt": "Đặt ba mốc theo thứ tự từ sớm đến muộn.",
+      "correct_order": [
+        "e01",
+        "e02",
+        "e03"
+      ],
+      "evidence_prompt": "Chọn đúng hai nguồn giúp so sánh ý nghĩa của Việt Bắc 1947 và Biên giới 1950.",
+      "correct_evidence_ids": [
+        "s02",
+        "s03"
+      ],
+      "relation_prompt": "Nhận định nào phù hợp với hai nguồn em chọn?",
+      "relation_options": [
+        {
+          "id": "r1",
+          "text": "Việt Bắc 1947 là phản công lớn đầu tiên; Biên giới 1950 là tiến công lớn đầu tiên của bộ đội chủ lực, giành thế chủ động ở Bắc Bộ."
+        },
+        {
+          "id": "r2",
+          "text": "Cả hai chiến dịch đều có ý nghĩa được mô tả giống hệt nhau trong SGK."
+        },
+        {
+          "id": "r3",
+          "text": "Chỉ cần nhìn vị trí địa lí là xác định được đầy đủ ý nghĩa của mỗi chiến dịch."
+        }
+      ],
+      "correct_relation_id": "r1",
+      "relation_explanation": "Đối chiếu hai mục “Ý nghĩa” ở SGK trang 40: phản công và tiến công không phải cùng một khái niệm.",
+      "writing_prompt": "Viết 2–4 câu giải thích sự khác nhau. Dẫn ít nhất một nguồn em đã chọn; không chỉ kể lại mốc năm.",
+      "teacher_guide": "Làm rõ phản công Việt Bắc 1947 và tiến công Biên giới 1950; dẫn chứng việc giành thế chủ động ở chiến trường chính Bắc Bộ. Không đánh đồng ý nghĩa của hai chiến dịch."
+    },
+    {
+      "id": "chien-truong-ban-dam-phan-1954",
+      "title": "Năm 1954: chiến trường và bàn đàm phán",
+      "lesson_ids": [
+        7,
+        13
+      ],
+      "duration_minutes": 10,
+      "summary": "Nối Điện Biên Phủ với Giơ-ne-vơ bằng chứng cứ, phân biệt trình tự thời gian và quan hệ lịch sử.",
+      "question": "SGK giải thích mối liên hệ giữa thắng lợi Điện Biên Phủ và việc đàm phán, kí Hiệp định Giơ-ne-vơ như thế nào?",
+      "event_ids": [
+        "e04",
+        "e05",
+        "e06"
+      ],
+      "source_ids": [
+        "s04",
+        "s05",
+        "s06",
+        "s07"
+      ],
+      "sequence_prompt": "Sắp xếp ba mốc của năm 1954 theo trình tự.",
+      "correct_order": [
+        "e04",
+        "e05",
+        "e06"
+      ],
+      "evidence_prompt": "Chọn đúng hai nguồn vừa nêu mối liên hệ chiến trường–đàm phán, vừa cho biết nội dung pháp lí của Hiệp định.",
+      "correct_evidence_ids": [
+        "s05",
+        "s06"
+      ],
+      "relation_prompt": "Từ hai nguồn, em có thể kết luận ở mức độ nào?",
+      "relation_options": [
+        {
+          "id": "r1",
+          "text": "Chỉ cần sự kiện xảy ra trước thì mặc nhiên là nguyên nhân duy nhất của sự kiện xảy ra sau."
+        },
+        {
+          "id": "r2",
+          "text": "SGK nêu thắng lợi Điện Biên Phủ tạo cơ sở cho đàm phán, kí Hiệp định; cần đối chiếu cả nguồn quân sự và ngoại giao."
+        },
+        {
+          "id": "r3",
+          "text": "Hai sự kiện ở hai địa điểm xa nhau nên không thể có liên hệ lịch sử."
+        }
+      ],
+      "correct_relation_id": "r2",
+      "relation_explanation": "Nguồn SGK trang 42 nêu trực tiếp “tạo cơ sở”; trang 79 nêu Hiệp định và các quyền dân tộc cơ bản. Khoảng cách địa lí và thứ tự thời gian tự chúng chưa đủ chứng minh quan hệ nhân quả.",
+      "writing_prompt": "Viết 2–4 câu giải thích mối liên hệ. Sử dụng cả hai nguồn đã chọn và tránh diễn giải thành nguyên nhân duy nhất.",
+      "teacher_guide": "Giải thích đúng mức độ “tạo cơ sở” từ thắng lợi quân sự đến đàm phán/kí kết, dẫn nguồn trang 42 và 79. Không suy ra nguyên nhân duy nhất chỉ từ thứ tự ngày tháng."
+    }
+  ]
+}
