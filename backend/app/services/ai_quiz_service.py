@@ -13,12 +13,14 @@ import time
 import uuid
 
 from sqlalchemy.orm import Session
-from app.core.config import get_settings
+from ..core.config import get_settings
 
 
 def _get_ai_client():
     """Return (client, model_name) for the configured AI provider."""
     settings = get_settings()
+    if not settings.external_ai_enabled:
+        return None,None,None
 
     # Prefer Grok, then OpenAI-compatible custom, then legacy Anthropic
     api_key = (
@@ -52,9 +54,9 @@ def generate_map_quiz(
     Returns:
         dict with session_token, total_questions, questions[]
     """
-    from app.models.map_quiz_session import MapQuizSession
-    from app.models.map_quiz_question import MapQuizQuestion
-    from app.models.historical_event import HistoricalEvent
+    from ..models.map_quiz_session import MapQuizSession
+    from ..models.map_quiz_question import MapQuizQuestion
+    from ..models.historical_event import HistoricalEvent
 
     settings = get_settings()
 

@@ -1,0 +1,17 @@
+FROM python:3.12-slim
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PYTHONUTF8=1
+RUN apt-get update && apt-get install -y --no-install-recommends poppler-utils \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd --gid 1000 cobraq && useradd --uid 1000 --gid cobraq --create-home cobraq
+WORKDIR /app
+COPY backend/requirements-sandbox.txt /app/requirements-sandbox.txt
+RUN pip install --no-cache-dir -r requirements-sandbox.txt
+COPY backend/app /app/backend/app
+COPY frontend /app/frontend
+COPY CobraQ_v3.html favicon.svg /app/
+COPY tools/sandbox.py /app/tools/sandbox.py
+USER 1000:1000
+EXPOSE 8010
+HEALTHCHECK --interval=20s --timeout=3s --start-period=20s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8010/health', timeout=2)"
+CMD ["python", "tools/sandbox.py", "serve", "--root", "/runtime", "--port", "8010"]

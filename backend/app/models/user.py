@@ -2,7 +2,7 @@
 User model — kept mostly compatible with existing JSON-based user_store.
 """
 from sqlalchemy import Column, Integer, String, DateTime, func
-from app.db.database import Base
+from ..db.database import Base
 
 
 class User(Base):

@@ -32,21 +32,20 @@ def _load_eval_logs(path: Path, limit: int = 500, user_id: Optional[str] = None)
 
 def compute_mrr(retrieval_results: list[tuple[int, float]]) -> float:
     """
-    Compute Mean Reciprocal Rank.
+    Compute reciprocal rank of the first relevant result for one query.
 
     Args:
-        retrieval_results: list of (rank, score) tuples, sorted by rank.
-                          rank starts at 1. Empty list = 0.
+        retrieval_results: (one-based rank, relevance) tuples; rank=0 means not retrieved.
 
     Returns:
         MRR score (0.0 to 1.0)
     """
     if not retrieval_results:
         return 0.0
-    relevant_ranks = [rank for rank, relevance in retrieval_results if rank > 0 and relevance > 0]
-    if not relevant_ranks:
+    ranks = [r for r, relevance in retrieval_results if r > 0 and relevance > 0]
+    if not ranks:
         return 0.0
-    return round(1.0 / min(relevant_ranks), 4)
+    return round(1.0 / min(ranks), 4)
 
 
 def compute_hit_rate_k(retrieval_results: list[tuple[int, float]], k: int = 5) -> float:
@@ -62,7 +61,7 @@ def compute_hit_rate_k(retrieval_results: list[tuple[int, float]], k: int = 5) -
     """
     if not retrieval_results:
         return 0.0
-    return 1.0 if any(0 < rank <= k and relevance > 0 for rank, relevance in retrieval_results) else 0.0
+    return float(any(0 < rank <= k and relevance > 0 for rank, relevance in retrieval_results))
 
 
 def compute_precision_k(retrieval_results: list[tuple[int, float]], k: int = 5) -> float:
@@ -79,7 +78,7 @@ def compute_precision_k(retrieval_results: list[tuple[int, float]], k: int = 5) 
     top_k = [(r, s) for r, s in retrieval_results if 0 < r <= k]
     if not top_k:
         return 0.0
-    relevant = sum(1 for _, relevance in top_k if relevance > 0)
+    relevant = sum(1 for rank, relevance in top_k if relevance > 0)
     return round(relevant / k, 4)
 
 
@@ -97,18 +96,8 @@ def compute_ndcg_k(retrieval_results: list[tuple[int, float]], k: int = 5) -> fl
     def dcg(gains: list[float]) -> float:
         return sum(g / math.log2(i + 2) for i, g in enumerate(gains))
 
-    observed = sorted(
-        [(rank, relevance) for rank, relevance in retrieval_results if 0 < rank <= k],
-        key=lambda item: item[0],
-    )
-    gains = [max(0.0, relevance) for _, relevance in observed]
-    gains.extend([0.0] * (k - len(gains)))
-    ideal_gains = sorted(
-        [max(0.0, relevance) for _, relevance in retrieval_results], reverse=True
-    )[:k]
-    ideal_gains.extend([0.0] * (k - len(ideal_gains)))
-
-    dcg_val = dcg(gains)
+    dcg_val = sum(s / math.log2(r + 1) for r, s in retrieval_results if 0 < r <= k)
+    ideal_gains = sorted([s for _, s in retrieval_results], reverse=True)[:k]
     idcg_val = dcg(ideal_gains)
 
     if idcg_val == 0:
@@ -158,6 +147,7 @@ def compute_retrieval_metrics_for_entry(
     Returns:
         dict with mrr, hit_rate_1/3/5, precision_1/3/5, ndcg_5
     """
+    retrieved_chunk_ids = list(dict.fromkeys(retrieved_chunk_ids))
     # Build rank map for retrieved chunks
     rank_map = {}
     for i, cid in enumerate(retrieved_chunk_ids):
@@ -230,9 +220,8 @@ def generate_retrieval_report(log_path: Path, limit: int = 500, user_id: Optiona
     """
     Generate retrieval metrics report from evaluation logs.
 
-    Since ground_truth_relevant isn't stored in logs, we approximate:
-    - Relevant = chunks retrieved at rank > 0 AND citation_present == True
-    - Non-relevant = retrieved chunks where response was blocked (hallucination_detected == True)
+    Only logs carrying teacher-approved ground truth are eligible.
+    Citation presence and block status do not establish retrieval relevance.
     """
     entries = _load_eval_logs(log_path, limit, user_id)
     tutoring = [e for e in entries if e.get("event_type") == "tutoring_query"]
@@ -240,20 +229,17 @@ def generate_retrieval_report(log_path: Path, limit: int = 500, user_id: Optiona
     per_query = []
     for entry in tutoring:
         retrieved_ids = entry.get("retrieval_chunks", [])
-        if not retrieved_ids:
+        if entry.get("gold_review_status") != "teacher_approved" or not entry.get("ground_truth_relevant"):
             continue
-        # Approximate: if citation_present=True and not blocked, treat as relevant
-        is_relevant = entry.get("citation_present", False) and not entry.get("hallucination_detected", False)
-        results = [(i + 1, 1.0 if is_relevant else 0.0) for i in range(len(retrieved_ids))]
-        mrr = compute_mrr(results)
-        hit_5 = compute_hit_rate_k(results, 5)
-        per_query.append({"mrr": mrr, "hit_rate_5": hit_5, "retrieved": retrieved_ids})
+        per_query.append(compute_retrieval_metrics_for_entry(
+            entry.get("query", ""), retrieved_ids, [], set(entry["ground_truth_relevant"])))
 
     agg = aggregate_retrieval_metrics(per_query)
 
     return {
         **agg,
-        "ground_truth_status": "proxy_not_for_research_conclusions",
         "per_query_sample": per_query[:20],
         "total_tutoring_queries": len(tutoring),
+        "unlabeled_queries": len(tutoring) - len(per_query),
+        "evaluation_status": "evaluated" if per_query else "awaiting_teacher_gold",
     }

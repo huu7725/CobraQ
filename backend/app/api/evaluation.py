@@ -1,3 +1,4 @@
+from ..core.config import data_path
 import sys as _sys
 from pathlib import Path as _Path
 _proj_root = _Path(__file__).resolve().parents[2]
@@ -70,7 +71,7 @@ def get_hallucination_metrics(
     current_user: Optional[dict] = Depends(get_current_user_optional),
 ):
     uid = (current_user.get("sub") if current_user else None) or x_user_id
-    log_path = Path("data/evaluation_logs.jsonl")
+    log_path = data_path("evaluation_logs.jsonl")
     try:
         from evaluation.metrics.hallucination import generate_hallucination_report
         return generate_hallucination_report(log_path, limit=limit, user_id=uid if uid != "guest" else None)
@@ -85,7 +86,7 @@ def get_retrieval_metrics(
     current_user: Optional[dict] = Depends(get_current_user_optional),
 ):
     uid = (current_user.get("sub") if current_user else None) or x_user_id
-    log_path = Path("data/evaluation_logs.jsonl")
+    log_path = data_path("evaluation_logs.jsonl")
     try:
         from evaluation.metrics.retrieval import generate_retrieval_report
         return generate_retrieval_report(log_path, limit=limit, user_id=uid if uid != "guest" else None)

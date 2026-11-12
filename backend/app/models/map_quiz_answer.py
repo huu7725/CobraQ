@@ -2,7 +2,7 @@
 MapQuizAnswer model — tracks a user's answer to a specific question in a map quiz.
 """
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, func, UniqueConstraint
-from app.db.database import Base
+from ..db.database import Base
 
 
 class MapQuizAnswer(Base):

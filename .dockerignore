@@ -41,3 +41,11 @@ node_modules/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.sandbox/
+.sandboxes/
+output/
+outputs/
+tmp/
+research/sources/*.pdf
+!research/verify_adapter.py
+!research/verify_adapter_recovered.py

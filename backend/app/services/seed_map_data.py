@@ -5,8 +5,8 @@ Run: cd backend && python -m app.services.seed_map_data
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from app.db.database import SessionLocal
-from app.models.historical_event import HistoricalEvent
+from ..db.database import SessionLocal
+from ..models.historical_event import HistoricalEvent
 import json
 
 

@@ -1,3 +1,4 @@
+from ..core.config import data_path
 import json
 from datetime import datetime
 from pathlib import Path
@@ -28,7 +29,7 @@ class EventType(str, Enum):
 
 
 class AuditLogger:
-    _log_path = Path("data/audit_log.jsonl")
+    _log_path = data_path("audit_log.jsonl")
 
     @classmethod
     def _ensure_dir(cls):

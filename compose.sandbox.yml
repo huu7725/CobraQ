@@ -1,0 +1,36 @@
+services:
+  sandbox:
+    build:
+      context: .
+      dockerfile: Dockerfile.sandbox
+    ports:
+      - "127.0.0.1:8010:8010"
+    environment:
+      COBRAQ_CONTAINER: "1"
+      COBRAQ_PROFILE: sandbox
+      COBRAQ_SANDBOX_ROOT: /runtime
+    volumes:
+      - ./.sandbox/.env:/runtime/.env:ro
+      - ./.sandbox/manifest.json:/runtime/manifest.json:ro
+      - ./.sandbox/data:/runtime/data
+      - ./.sandbox/research:/runtime/research
+      - ./.sandbox/cache:/runtime/cache
+      - ./.sandbox/logs:/runtime/logs
+      - ./.sandbox/run:/runtime/run
+      - ./.sandbox/models:/runtime/models:ro
+      - ./.sandbox/artifacts:/runtime/artifacts:ro
+    read_only: true
+    tmpfs:
+      - /tmp:size=128m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 128
+    mem_limit: 2g
+    cpus: 2
+    networks:
+      - isolated
+networks:
+  isolated:
+    internal: true

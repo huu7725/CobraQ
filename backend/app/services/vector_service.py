@@ -19,6 +19,7 @@ except ImportError:
     CHROMA_AVAILABLE = False
 
 from .trust_layer import Chunk
+from ..core.config import data_path, get_settings
 
 
 class VectorService:
@@ -29,11 +30,11 @@ class VectorService:
 
     def __init__(
         self,
-        persist_dir: str = "data/chroma_db",
+        persist_dir: str | None = None,
         collection_name: str = "cobraq_chunks",
         embedding_model: Optional[str] = None,
     ):
-        self.persist_dir = persist_dir
+        self.persist_dir = str(persist_dir or data_path("chroma_db"))
         self.collection_name = collection_name
         self.embedding_model = embedding_model or os.getenv(
             "COBRAQ_EMBEDDING_MODEL", "intfloat/multilingual-e5-small"
@@ -45,11 +46,11 @@ class VectorService:
         self._use_chroma = False
         self._keyword_fallback: dict[str, list[Chunk]] = {}
 
-        if CHROMA_AVAILABLE:
+        if CHROMA_AVAILABLE and get_settings().vector_enabled:
             try:
-                Path(persist_dir).mkdir(parents=True, exist_ok=True)
+                Path(self.persist_dir).mkdir(parents=True, exist_ok=True)
                 self._client = chromadb.PersistentClient(
-                    path=persist_dir,
+                    path=self.persist_dir,
                     settings=ChromaSettings(anonymized_telemetry=False),
                 )
                 self._collection = self._client.get_or_create_collection(
@@ -343,3 +344,9 @@ class VectorService:
 def get_vector_service() -> VectorService:
     """Create the default store only when a caller explicitly requests it."""
     return VectorService()
+
+
+def __getattr__(name):
+    if name == "vector_service":
+        return get_vector_service()
+    raise AttributeError(name)

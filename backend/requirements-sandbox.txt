@@ -1,0 +1,25 @@
+# CPU sandbox for web/API/parser tests. Local model inference is optional and installed separately.
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0
+python-multipart>=0.0.9
+python-dotenv>=1.0.0
+pydantic>=2.0.0
+pydantic-settings>=2.0.0
+email-validator>=2.0.0
+httpx>=0.28.0
+aiofiles>=23.0.0
+asgiref>=3.7.0
+pymupdf>=1.24.0
+python-docx>=1.1.0
+pypdf>=4.0.0
+python-jose[cryptography]>=3.3.0
+passlib[bcrypt]>=1.7.4
+bcrypt<4.1
+bleach>=6.1.0
+pdf2image>=1.17.0
+Pillow>=10.0.0
+slowapi>=0.1.9
+psutil>=5.9.0
+
+# Route registration includes SQL-backed history map models.
+SQLAlchemy>=2.0.0

@@ -1,148 +1,478 @@
-# CobraQ - Trợ lý ôn tập và tạo câu hỏi Lịch sử 12
+# CobraQ — Hệ thống Ôn tập Thông minh
 
-CobraQ là nguyên mẫu web hỗ trợ học sinh ôn tập SGK Lịch sử 12, giáo viên quản lý học liệu/câu hỏi và quản trị viên theo dõi hệ thống. Backend dùng FastAPI, frontend được FastAPI phục vụ trực tiếp từ `CobraQ_v3.html`. Phạm vi học liệu hiện tại là SGK Lịch sử 12 - bộ Kết nối tri thức với cuộc sống.
+Luồng trích xuất Word/PDF/OCR chạy trên môi trường chính cổng 8000 bằng `start.bat`.
+Hỗ trợ lưu tài liệu gốc, đọc PDF scan cục bộ, trạng thái nền theo trang và nhận dạng
+câu hỏi/đáp án. Hướng dẫn đưa dữ liệu vào: [DOCUMENT_EXTRACTION.md](DOCUMENT_EXTRACTION.md).
 
-## Khởi động nhanh trên Windows
+Môi trường thử nghiệm riêng: chạy `setup_sandbox.bat`, sau đó `start_sandbox.bat`
+để mở sandbox tại `http://127.0.0.1:8010`. Tài khoản và dữ liệu nằm trong `.sandbox`.
+Hướng dẫn môi trường, kiểm tra và container: [SANDBOX.md](SANDBOX.md).
 
-### Lần đầu cài đặt
+## Cập nhật nghiên cứu ngày 12/11/2026
 
-Mở PowerShell tại thư mục dự án:
+Đã nối giao diện **Luyện Lịch sử 12** và **Duyệt học liệu** với API nghiên cứu,
+thêm công cụ kiểm chứng adapter, đánh giá retrieval/NLP và phân tích pre/post.
+Trạng thái thực tế và các tài nguyên còn thiếu nằm trong [CURRENT_STATUS.md](CURRENT_STATUS.md);
+lệnh chạy và định dạng dữ liệu nằm trong [research/README.md](research/README.md).
+Workspace hiện có 199 đoạn nguồn, 60 câu nháp và 51 truy vấn chưa được giáo viên duyệt.
+Model/adapter và kết quả thực nghiệm trước chưa được khôi phục. Các mục roadmap
+bên dưới là ghi chép của phiên bản trước, không thay thế trạng thái hiện tại.
 
-```powershell
-cd "C:\Users\<tên-bạn>\Desktop\CobraQ"
-```
+## Tổng quan
 
-Tạo môi trường Python và cài thư viện backend:
+Hệ thống quiz thông minh hỗ trợ học sinh ôn tập từ đề thi upload (Word/PDF), tích hợp AI để nhận dạng đáp án từ bảng tô màu và gia sư AI theo ngữ liệu.
 
-```powershell
-cd backend
-python -m venv venv
-.\venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
-pip install -r requirements.txt
-```
+## Cài đặt và chạy trên Windows
 
-Nếu PowerShell chặn activate, chỉ cần gọi trực tiếp Python trong môi trường:
-
-```powershell
-.\venv\Scripts\python.exe -m pip install -r requirements.txt
-```
-
-Tạo file cấu hình local (không đưa file này lên Git):
+Môi trường sử dụng Python 3.12 (64-bit), thư viện được cài riêng trong `.venv`.
+Frontend là HTML/JavaScript thuần nên không cần cài thêm npm packages.
 
 ```powershell
-Copy-Item .env.example .env
+.\setup.bat   # Tạo .venv và cài thư viện; có thể chạy lại khi cần
+.\start.bat   # Chạy backend hiện tại và phục vụ giao diện
 ```
 
-Mở `backend/.env` và đổi ít nhất `SECRET_KEY` và `ADMIN_PASSWORD`. `GROK_API_KEY` chỉ cần khi muốn dùng tính năng AI cần API; luồng luyện 60 câu và tra cứu SGK có sẵn có thể dùng để chạy thử local.
+Truy cập http://127.0.0.1:8000 để sử dụng ứng dụng, hoặc
+http://127.0.0.1:8000/docs để xem API. Nhấn `Ctrl+C` để dừng.
+`run.bat` cũng khởi động cùng backend từ thư mục `backend`, để nạp đúng
+`backend/.env` và dữ liệu trong `backend/data`.
 
-### Mỗi lần chạy sau
+`setup.bat` tìm Python 3.12 đã cài trên máy, sau đó dùng Python đi kèm Codex
+nếu có. Khi có `requirements-lock.txt`, script cài đúng các phiên bản đã kiểm
+tra trên Windows/Python 3.12. Danh sách thư viện nguồn nằm trong
+`backend/requirements.txt`; tệp `requirements.txt` ở gốc dẫn tới danh sách này.
+
+Nếu chưa có `backend/.env`, script sao chép từ `backend/.env.example`.
+Điền `ANTHROPIC_API_KEY` hợp lệ để sử dụng các tính năng gọi Claude.
+`pdf2image` cần Poppler; `run.bat` tự thêm Poppler đi kèm Codex vào PATH
+nếu có. Với máy khác, cần cài Poppler và thêm thư mục chứa `pdfinfo.exe`,
+`pdftoppm.exe` vào PATH.
+
+Kiểm tra thư viện sau khi cài:
 
 ```powershell
-cd "C:\Users\<tên-bạn>\Desktop\CobraQ\backend"
-.\venv\Scripts\Activate.ps1
-uvicorn app.main:app --host 127.0.0.1 --port 8000
+.\.venv\Scripts\python.exe -m pip check
+.\.venv\Scripts\python.exe backend\check_deps.py
 ```
 
-Giữ cửa sổ PowerShell này mở. Mở trình duyệt tại:
+## Kiến trúc hiện tại
 
-- Ứng dụng: <http://127.0.0.1:8000>
-- Tài liệu API Swagger: <http://127.0.0.1:8000/docs>
-- Kiểm tra server: <http://127.0.0.1:8000/health> (kết quả mong đợi: `{"status":"ok"}`)
-
-Dừng server bằng `Ctrl+C`.
-
-### Cho người khác dùng trong cùng mạng Wi-Fi
-
-Trên máy chạy server, lấy địa chỉ IPv4:
-
-```powershell
-ipconfig
 ```
-
-Chạy server lắng nghe các thiết bị trong mạng:
-
-```powershell
-uvicorn app.main:app --host 0.0.0.0 --port 8000
-```
-
-Người dùng khác mở `http://<IPv4-của-máy-chạy-server>:8000`, ví dụ `http://192.168.1.20:8000`. Hai máy phải cùng mạng và Windows Firewall phải cho phép Python/Uvicorn qua mạng riêng. Không mở cổng này ra Internet công cộng; muốn chia sẻ qua Internet hãy dùng deploy Render theo hướng dẫn bên dưới.
-
-### Dùng môi trường đã có sẵn trong máy phát triển
-
-Nếu repository đã có `backend/venv` hoặc `venv2`, không cần tạo lại môi trường:
-
-```powershell
-cd "C:\Users\<tên-bạn>\Desktop\CobraQ\backend"
-..\venv2\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000
-```
-
-Lệnh trên cần được chạy từ thư mục `backend` để Python tìm đúng package `app` và dữ liệu local.
-
-## Chạy thử sản phẩm
-
-1. Mở `http://127.0.0.1:8000`.
-2. Chọn **Tiếp tục với tư cách khách** rồi vào **Luyện SGK đã duyệt**.
-3. Chọn bài, loại câu hỏi và số lượng, sau đó bấm **Bắt đầu luyện**.
-4. Chọn đáp án và nộp bài để xem lời giải, nguồn SGK và kết quả.
-5. Chọn **Tra cứu SGK** để thử tìm một sự kiện, ví dụ `Chiến dịch Điện Biên Phủ năm 1954`.
-
-Tại **Tra cứu SGK**, nút **Chụp / chọn ảnh SGK** cho phép chụp hoặc chọn ảnh một đoạn sách, OCR bằng Tesseract rồi tìm trong kho SGK. Docker đã có Tesseract; chạy local cần cài thêm Tesseract OCR trên Windows và thư viện `pytesseract`.
-
-Đây là dữ liệu held-out đã duyệt dùng để trình diễn luồng luyện tập. Chức năng sinh câu hỏi mới bằng adapter chỉ được bật sau khi batch verifier và pilot đạt quality gate; không coi JSON hợp lệ hoặc citation đúng provenance là bằng chứng tuyệt đối về tính đúng lịch sử.
-
-## Kiểm thử bằng Postman
-
-Collection có sẵn tại `postman/CobraQ.postman_collection.json`. Import file này vào Postman, giữ biến `base_url` là `http://127.0.0.1:8000`, rồi chạy theo thứ tự Health, đăng ký/đăng nhập, danh mục luyện tập, bắt đầu phiên, nộp phiên và Tra cứu SGK. Hướng dẫn chi tiết và mã lỗi nằm trong [POSTMAN_TESTING.md](./POSTMAN_TESTING.md).
-
-## Chạy bằng Docker
-
-Đã cài Docker Desktop, chạy tại thư mục gốc:
-
-```powershell
-docker build -t cobraq .
-docker run --rm -p 8000:7860 --env-file backend/.env cobraq
-```
-
-Sau đó mở `http://127.0.0.1:8000`. Dockerfile cài Python, Poppler và Tesseract cần cho xử lý tài liệu. Dữ liệu trong container là dữ liệu tạm nếu không mount volume.
-
-## Deploy Render
-
-Repository đã có `Dockerfile`, `render.yaml` và hướng dẫn tại [DEPLOY_RENDER.md](./DEPLOY_RENDER.md). Khi deploy cần khai báo các secret trong Render Dashboard, tối thiểu `SECRET_KEY`; không commit `.env`, API key hoặc dữ liệu người dùng. Gói Free có giới hạn RAM và không có persistent disk, phù hợp demo hơn là vận hành dữ liệu thật.
-
-## Cấu trúc chính
-
-```text
 CobraQ/
-├── CobraQ_v3.html              # Frontend theo vai trò học sinh/giáo viên/admin
-├── backend/app/main.py         # FastAPI entry point và static frontend
-├── backend/app/api/             # Auth, luyện tập, file, nhóm, nghiên cứu...
-├── backend/requirements.txt
-├── data/research/               # Dữ liệu nghiên cứu local
-├── artifacts/adapters/          # Adapter local, không bắt buộc để chạy demo
-├── postman/                     # Postman collection
-├── Dockerfile
-├── render.yaml
-└── POSTMAN_TESTING.md
+├── CobraQ_v3.html           # Frontend SPA (vanilla JS) — JWT auth ✅
+├── backend/                 # ✅ Backend đã tách cấu trúc
+│   ├── app/
+│   │   ├── main.py        # FastAPI app entry point
+│   │   ├── api/           # auth, quiz, files, config, tutoring, evaluation, users, admin
+│   │   ├── core/          # config, security (JWT/bcrypt), audit
+│   │   ├── services/      # trust_layer, evaluation, vector_service ✅
+│   │   └── db/            # user_store (JSON)
+│   └── requirements.txt
+├── evaluation/              # ✅ Evaluation pipeline
+│   ├── metrics/
+│   │   ├── hallucination.py  # Hallucination, citation, block rate
+│   │   ├── retrieval.py      # MRR, HitRate@k, Precision@k, NDCG@k
+│   │   └── precision.py       # Quiz accuracy, score distribution, role perf
+│   ├── dashboard.html         # ✅ Evaluation dashboard
+│   └── __init__.py
+├── data/                    # Uploads, audit logs, evaluation logs
+│   ├── audit_log.jsonl     # Audit events
+│   └── evaluation_logs.jsonl
+└── venv/
 ```
 
-## Lưu ý cho người nhận repository
+**Frontend:** Single-page app vanilla JS, giao tiếp REST với backend tại `http://127.0.0.1:8000`.
 
-- Cần Python 3.11 trở lên; Windows nên dùng PowerShell.
-- Không commit `backend/.env`, mật khẩu, API key, database người dùng hoặc file model lớn.
-- Nếu chỉ muốn xem giao diện, có thể mở server local và dùng luồng khách; không mở `CobraQ_v3.html` bằng `file://` vì frontend cần API HTTP.
-- Nếu cổng 8000 đang bận, dừng tiến trình cũ hoặc dùng cổng khác, ví dụ `--port 8001`, rồi mở đúng URL mới.
-- Dữ liệu và model nghiên cứu lớn có thể được loại khỏi Git; cần lấy đúng artifact/data tương ứng trước khi chạy thực nghiệm.
+**Backend:** FastAPI monolith — xử lý upload, quiz, AI Vision, session, history trong 1 file.
 
-## Công nghệ
+**Data:** SQLite nhẹ.
 
-FastAPI, Uvicorn, SQLAlchemy/SQLite, JWT, ChromaDB, multilingual-e5-small, Tesseract OCR, TinyLlama và QLoRA/PEFT. Frontend là HTML/CSS/JavaScript một file, không cần bước build Node.js.
+**AI:** Claude Vision API — hiện chỉ parse đáp án từ bảng tô màu.
 
-## Tài liệu liên quan
+**Auth:** JWT Bearer token + bcrypt — **bảo mật, backend `core/security.py` + frontend `CobraQ_v3.html` đã kết nối ✅**
 
-- [POSTMAN_TESTING.md](./POSTMAN_TESTING.md) - kiểm thử API.
-- [DEPLOY_RENDER.md](./DEPLOY_RENDER.md) - deploy Render.
-- [research/README.md](./research/README.md) - pipeline nghiên cứu và đánh giá.
-- [research/CURRENT_STATUS.md](./research/CURRENT_STATUS.md) - tiến độ, giới hạn và điều kiện công bố.
+## Roadmap Kiến trúc
 
-MIT - sử dụng cho mục đích cá nhân và giáo dục.
+### Giai đoạn 0 — Tái cấu trúc Backend (1-2 ngày) ✅ HOÀN THÀNH
+
+```
+backend/
+├── app/
+│   ├── api/           # Endpoints: auth, quiz, files, config, tutoring, evaluation, users, admin
+│   ├── core/          # config, security, audit
+│   ├── services/      # trust_layer, evaluation, vector_service
+│   ├── models/        # Pydantic models
+│   ├── db/            # JSON user store
+│   └── main.py
+├── requirements.txt
+└── .env
+```
+
+### Giai đoạn 1 — Bảo mật (Tuần 1) ✅ HOÀN THÀNH
+
+**Đã hoàn thành trước khi pilot trường học.**
+
+- **JWT auth** — thay `btoa()` localStorage ✅
+- **Password hashing** — `bcrypt` qua `passlib` ✅
+- **Role-based access** — student / teacher / admin ✅
+- **Audit log** — log mọi hành động (login, quiz, upload, AI query) ✅
+- **Output sanitization** — chặn XSS trong AI response ✅
+
+```python
+# Role enum
+class Role(str, Enum):
+    STUDENT = "student"
+    TEACHER = "teacher"
+    ADMIN = "admin"
+
+# Decorator RBAC
+@require_role(Role.TEACHER, Role.ADMIN)
+```
+
+### Giai đoạn 2 — AI Pipeline & Trust Layer (Tuần 2-3) ✅ HOÀN THÀNH
+
+**Mục tiêu:** AI tutoring chat theo ngữ liệu, mỗi câu trả lời phải có citation.
+
+```
+evaluation/
+├── metrics/
+│   ├── hallucination.py   # ✅ Hallucination rate, citation rate, block rate
+│   ├── retrieval.py        # ✅ MRR, HitRate@k, Precision@k, NDCG@k
+│   └── precision.py        # ✅ Quiz accuracy, score distribution, role perf
+├── dashboard.html          # ✅ Evaluation dashboard (mở trong trình duyệt)
+└── __init__.py
+```
+
+**Trust Layer đã implement (`backend/app/services/trust_layer.py`):**
+
+```python
+class TrustLayer:
+    min_confidence: float = 0.5
+    min_chunks: int = 1
+
+    def should_block(self, chunks, confidence) -> bool:
+        return len(chunks) < self.min_chunks or confidence < self.min_confidence
+```
+
+Mỗi AI response trả về:
+- `source_chunks`: đoạn text gốc từ ngữ liệu
+- `citations`: `{chunk_id, page, text, confidence}`
+- `blocked`: True nếu không có evidence
+
+**Dashboard:** Mở `evaluation/dashboard.html` trong trình duyệt, kết nối tới `http://127.0.0.1:8000`.
+
+**Vector DB:** ChromaDB / FAISS cho semantic search (TODO, hiện dùng keyword overlap).
+
+### Giai đoạn 3 — AI Tutoring Module (Tuần 2-3) ✅ HOÀN THÀNH
+
+Endpoint `/api/tutoring/chat` đã implement:
+
+```
+POST /api/tutoring/chat
+Body: { message, file_id?, session_id?, history? }
+Response: { message, blocked, block_reason, citations: [{text, chunk_id, source, score}], session_id }
+```
+
+- ✅ Retrieve chunks từ file_id (keyword search)
+- ✅ Trust layer chặn nếu không đủ evidence
+- ✅ Sanitize output bằng `bleach`
+- ✅ Evaluation log ghi mọi query
+- ⚠️ Placeholder: chưa gọi Claude/GPT API thực sự (TODO)
+- ⚠️ Rate limiting per user (TODO)
+- ⚠️ Giới hạn context window (TODO)
+
+### Giai đoạn 4 — Evaluation Pipeline (Tuần 4+) ✅ HOÀN THÀNH
+
+**Metrics đã implement:**
+
+| Metric | Mô tả | Target | File |
+|--------|--------|--------|------|
+| Hallucination Rate | % câu trả lời không có citation | < 5% | `metrics/hallucination.py` |
+| Citation Rate | % responses có citation | > 80% | `metrics/hallucination.py` |
+| Block Rate | % queries bị trust layer chặn | < 5% | `metrics/hallucination.py` |
+| MRR | Mean Reciprocal Rank retrieval | > 0.7 | `metrics/retrieval.py` |
+| HitRate@5 | % queries có relevant doc trong top-5 | > 80% | `metrics/retrieval.py` |
+| NDCG@5 | Normalized DCG | > 0.6 | `metrics/retrieval.py` |
+| Quiz Accuracy | % đáp án đúng | theo baseline | `metrics/precision.py` |
+| Answer Coverage | % câu hỏi có đáp án | > 70% | `metrics/precision.py` |
+| Score Distribution | Bucket phân bố điểm | — | `metrics/precision.py` |
+| Role Performance | Accuracy theo role | — | `metrics/precision.py` |
+
+**API endpoints:**
+
+```
+GET /evaluation/metrics         # Quiz + overall metrics
+GET /evaluation/logs            # Raw evaluation log entries
+GET /evaluation/hallucination   # Hallucination metrics + high-violation entries
+GET /evaluation/retrieval      # MRR, HitRate, Precision, NDCG
+```
+
+**Dashboard:** Mở `evaluation/dashboard.html` (auto-refresh 60s, KPI cards, charts, session list).
+
+**Evaluation log structure:**
+
+```json
+{
+  "session_id": "uuid",
+  "timestamp": "ISO8601",
+  "user_id": "email",
+  "role": "student|teacher",
+  "event_type": "quiz_answer|tutoring_query",
+  "question_id": "q123",
+  "student_answer": "A",
+  "correct_answer": "B",
+  "is_correct": false,
+  "time_taken_ms": 15000,
+  "ai_used": false,
+  "retrieval_chunks": ["chunk_id"],
+  "hallucination_detected": false,
+  "citation_present": true
+}
+```
+
+### Giai đoạn 5 — Frontend Module hóa (Tuần 5+)
+
+Tách HTML thành module ESM hoặc chuyển sang React/Vue:
+- `src/components/` — UI components
+- `src/pages/` — Dashboard, Quiz, Upload, History
+- `src/services/` — API service layer
+- `src/stores/` — State management (Zustand)
+
+### Giai đoạn 6 — Role-Based Access Control ✅ HOÀN THÀNH
+
+**Vai trò:**
+
+| Vai trò | Quyền |
+|---------|-------|
+| `student` (mặc định) | Làm bài quiz, xem lịch sử, upload đề cá nhân, tham gia nhóm |
+| `teacher` | + Tạo/quản lý nhóm, gán đề cho nhóm, chat AI gia sư, xem đánh giá AI |
+| `admin` | + Quản lý người dùng (đổi vai trò, xóa), xem thống kê hệ thống, nhật ký audit |
+
+**Frontend pages theo vai trò:**
+
+- **Tất cả:** Dashboard, Làm bài, Lịch sử, Tệp đã tải, Cài đặt
+- **Teacher/Admin thêm:** Nhóm của tôi, 💬 Gia sư AI, 📚 Quản lý đề, 📊 Đánh giá AI
+- **Admin thêm:** 👥 Người dùng, 📈 Thống kê hệ thống, 📋 Nhật ký hệ thống
+
+**API endpoints mới:**
+
+```
+GET  /users/                  # List all users (admin)
+PUT  /users/{email}/role     # Update role (admin)
+DELETE /users/{email}         # Delete user (admin)
+GET  /admin/stats             # System-wide stats (admin)
+GET  /admin/audit             # Audit logs (admin)
+GET  /admin/activity          # Daily activity (admin)
+```
+
+**RBAC trên files:** Teacher/Admin có thể xem, chỉnh sửa, xóa đề của bất kỳ user nào qua header `x-file-for`.
+
+### Giai đoạn 6b — Quản lý Nhóm / Lớp học ✅ HOÀN THÀNH
+
+**Tính năng:**
+
+| Hành động | Mô tả |
+|-----------|-------|
+| GV tạo nhóm | Tên nhóm + mã nhóm tự động 8 ký tự |
+| GV gán đề | Upload file đã parse vào nhóm với **số câu hỏi** và **thời gian giới hạn** tùy chỉnh |
+| HS tham gia nhóm | Nhập mã nhóm để tham gia (tham gia nhiều nhóm được) |
+| HS làm bài nhóm | Làm đề được gán, thời gian và số câu theo cài đặt của GV |
+| GV xem điểm | Bảng điểm chi tiết từng HS cho từng đề |
+| Chỉnh sửa cài đặt | Popup UI cho GV thay đổi số câu / thời gian sau khi gán |
+
+**Database files:**
+
+```
+backend/app/db/
+├── group_store.py      # Lưu nhóm: thành viên, file đã gán + cài đặt
+└── group_scores.py     # Lưu điểm HS: đáp án, thời gian, phần trăm
+```
+
+**API endpoints nhóm:**
+
+```
+POST /groups/              # Tạo nhóm (teacher)
+GET  /groups/my            # Nhóm của tôi (teacher=own, student=joined)
+POST /groups/join          # Tham gia nhóm (student)
+DELETE /groups/leave/{code} # Rời nhóm (student)
+PUT  /groups/{code}       # Sửa tên nhóm (teacher)
+DELETE /groups/{code}      # Xóa nhóm (teacher)
+
+POST   /groups/{code}/files              # Gán đề + cài đặt (teacher)
+GET    /groups/{code}/files             # Danh sách đề + cài đặt (all)
+PUT    /groups/{code}/files/{file_id}   # Chỉnh sửa cài đặt (teacher)
+DELETE /groups/{code}/files/{file_id}   # Xóa đề khỏi nhóm (teacher)
+
+GET /groups/{code}/files/{file_id}/scores      # Bảng điểm GV
+GET /groups/{code}/files/{file_id}/scores/me   # Điểm của mình (HS)
+
+GET /groups/{code}/members      # Danh sách thành viên
+DELETE /groups/{code}/members/{email} # Xóa thành viên
+```
+
+**Cài đặt đề khi gán cho nhóm:**
+
+| Tham số | Mặc định | Mô tả |
+|---------|---------|-------|
+| `num_questions` | 10 | Số câu hỏi random cho mỗi lần làm |
+| `time_limit` | 0 (không giới hạn) | Thời gian làm bài (phút). 0 = không giới hạn |
+
+Khi HS nhấn "Làm bài", backend tự đọc `num_questions` và `time_limit` từ cài đặt nhóm, bỏ qua tham số URL. GV có thể chỉnh sửa cài đặt bất kỳ lúc nào qua popup UI.
+
+## Dependencies cần thêm
+
+```txt
+# Backend
+fastapi==0.115.*
+uvicorn[standard]>=0.30
+python-jose[cryptography]   # JWT
+passlib[bcrypt]             # Password hashing
+bleach                      # Output sanitization
+chromadb>=0.5.0             # Vector DB (Giai đoạn 2)
+anthropic>=0.25.0            # Claude API
+python-multipart            # File upload
+pydantic>=2.0
+
+# Tutoring
+tiktoken>=0.7.0             # Token counting (context window)
+slowapi>=0.1.9              # Rate limiting
+
+# Evaluation
+scikit-learn                # Metrics computation
+pandas                      # Data analysis
+```
+
+## Cấu trúc Database mở rộng
+
+```sql
+-- Users (thêm role)
+CREATE TABLE users (
+    id TEXT PRIMARY KEY,
+    email TEXT UNIQUE NOT NULL,
+    name TEXT,
+    password_hash TEXT NOT NULL,
+    role TEXT DEFAULT 'student',  -- student | teacher | admin
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Audit log
+CREATE TABLE audit_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+    user_id TEXT,
+    role TEXT,
+    event_type TEXT,
+    resource TEXT,
+    action TEXT,
+    ip_address TEXT,
+    details TEXT
+);
+
+-- Document chunks (cho vector search)
+CREATE TABLE document_chunks (
+    id TEXT PRIMARY KEY,
+    file_id TEXT,
+    chunk_index INTEGER,
+    text TEXT,
+    page INTEGER,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (file_id) REFERENCES files(id)
+);
+
+-- Tutoring sessions
+CREATE TABLE tutoring_sessions (
+    id TEXT PRIMARY KEY,
+    user_id TEXT,
+    file_id TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Evaluation logs
+CREATE TABLE evaluation_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id TEXT,
+    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+    event_type TEXT,
+    query TEXT,
+    response TEXT,
+    chunks_used TEXT,  -- JSON array
+    citation_present BOOLEAN,
+    hallucination_detected BOOLEAN,
+    retrieval_score REAL
+);
+```
+
+## Quick wins (ĐÃ HOÀN THÀNH)
+
+### ✅ Đã làm xong
+
+1. **Di chuyển `main.py`** vào `backend/app/` — cấu trúc package đầy đủ
+2. **JWT + bcrypt** — `backend/app/core/security.py`
+   - `hash_password()`, `verify_password()`, `create_access_token()`
+   - Role enum: student / teacher / admin
+   - `require_role()` decorator
+3. **Audit log cơ bản** — `backend/app/core/audit.py`
+   - Ghi `event_type`, `user_id`, `role`, `timestamp`, `details` vào JSONL
+   - Event types: auth.*, quiz.*, file.*, tutoring.*, config.*
+4. **Trust layer** — `backend/app/services/trust_layer.py`
+   - `should_block()` — chặn nếu không đủ evidence
+   - `retrieve_chunks()` — keyword search
+   - `build_context()` — ghép chunks
+   - `evaluate()` — hallucination rate
+5. **Sanitize output** — `bleach.clean()` trong `tutoring.py`
+6. **Evaluation pipeline** — `evaluation/metrics/`
+   - `hallucination.py`: hallucination rate, citation rate, block rate, citation diversity
+   - `retrieval.py`: MRR, HitRate@k, Precision@k, NDCG@k
+   - `precision.py`: quiz accuracy, score distribution, role performance, improvement trend
+7. **Evaluation dashboard** — `evaluation/dashboard.html`
+   - KPI cards: hallucination rate, citation rate, quiz accuracy, MRR, block rate
+   - Retrieval metrics table với progress bars vs targets
+   - Quiz score distribution chart, citation donut, session list, role performance
+8. **API endpoints** — `/evaluation/metrics`, `/evaluation/logs`, `/evaluation/hallucination`, `/evaluation/retrieval`
+9. **Claude API integration** — `call_claude_api()` trong `tutoring.py`
+   - Model: `claude-haiku-4`, system prompt yêu cầu citation bắt buộc
+   - Falls back gracefully khi không có API key
+10. **ChromaDB vector search** — `services/vector_service.py`
+    - Semantic search thay thế keyword overlap
+    - Keyword fallback khi ChromaDB unavailable
+    - Persistent storage ở `data/chroma_db/`
+11. **Rate limiting** — 20 req/min, 100 req/hour per user trong `tutoring.py`
+12. **Context window limit** — `MAX_CONTEXT_TOKENS=6000`, token count bằng `tiktoken`
+13. **SlowAPI rate limiter** — registered trong `main.py` app state
+14. **Role-based access control** — 3 vai trò: student / teacher / admin
+    - `auth.py`: role selection khi register
+    - `users.py`: list, update role, delete user (admin)
+    - `admin.py`: system-wide stats, audit logs, activity
+15. **Frontend role-based pages** — `CobraQ_v3.html`
+    - Role selection UI khi đăng ký (🎓 Sinh viên / 👨‍🏫 Giáo viên)
+    - Sidebar menu động theo vai trò
+    - Admin panel: user management, role assignment, system stats, audit logs
+    - Evaluation dashboard: inline KPIs + charts trong app
+    - Teacher/Admin: quản lý đề mọi user, AI tutoring chat
+16. **RBAC trên files API** — Teacher/Admin xem/chỉnh sửa đề của mọi user qua `x-file-for` header
+17. **Quan ly nhom / Lop hoc** — `app/db/group_store.py`, `app/db/group_scores.py`, `app/api/groups.py`
+    - GV tao nhom, gan de voi `num_questions` va `time_limit` tuy chinh
+    - HS tham gia nhieu nhom, lam bai nhom voi thoi gian va so cau theo cai dat GV
+    - GV xem bang diem chi tiet, chinh sua cai dat qua popup UI
+    - Modal chinh sua (`efm`) voi nut tang/giam so cau va thoi gian
+
+### Còn lại (triển khai khi cần)
+
+- **Giới hạn context window cho tutoring** — đã implement với `MAX_CONTEXT_TOKENS=6000` ✅
+- **Vector DB (ChromaDB)** — đã implement trong `services/vector_service.py`, keyword fallback khi ChromaDB unavailable ✅
+- **Claude API cho tutoring chat** — đã implement, gọi `claude-haiku-4` với system prompt và citation requirement ✅
+- **Rate limiting per user** — đã implement: 20 req/min, 100 req/hour trong `tutoring.py` ✅
+
+## Không nên làm
+
+- **Viết lại frontend từ đầu khi chưa ổn định backend** — Backend da on dinh (JWT, trust layer, evaluation pipeline, Claude API deu da implement). Neu frontend can refactor, nen giu backend nhu cu.
+- Thêm nhiều tính năng mới vào `main_updated.py` — nó đã quá dài
+- Bỏ qua security để nhanh pilot — đã hoàn thành JWT + bcrypt ✅
+- Import vector DB khi chưa có trust layer — tốc độ không thay thế được độ chính xác
+- Bỏ qua evaluation khi build AI features — hallucination rate khong the uoc tinh bang cam tinh
+
+## Cac workflow nghien cuu
+
+Workflow C0-C3 da dang ky duoc giu tai `research/README.md`.
+Cong cu cho queue khoi phuc: `research/README_RECOVERED.md`; su dung lenh `evaluate_retrieval_recovered` va `verify_adapter_recovered`.
+Ban do lich su tai `/map`; SQLAlchemy/Postgres va deployment Render duoc giu lai.

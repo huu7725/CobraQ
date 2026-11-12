@@ -1,3 +1,4 @@
+from ..core.config import data_path
 """
 Admin dashboard endpoints — admin only.
 System-wide statistics across all users.
@@ -30,7 +31,7 @@ def load_json(path, default):
 
 
 def user_dir(uid):
-    return Path("data/users") / re.sub(r"[^\w]", "_", uid)
+    return data_path("users") / re.sub(r"[^\w]", "_", uid)
 
 
 def files_index_path(uid): return user_dir(uid) / "files_index.json"
@@ -114,7 +115,7 @@ def admin_audit_logs(
     """View audit logs — admin only."""
     _check_admin(current_user)
 
-    audit_path = Path("data/audit_log.jsonl")
+    audit_path = data_path("audit_log.jsonl")
     if not audit_path.exists():
         return {"logs": [], "total": 0}
 

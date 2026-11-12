@@ -1,3 +1,4 @@
+from ..core.config import data_path
 import json
 from pathlib import Path
 from typing import Optional
@@ -9,7 +10,7 @@ class UserStore:
     Thay bằng SQL database khi mở rộng.
     """
 
-    _path = Path("data/users_store.json")
+    _path = data_path("users_store.json")
 
     @classmethod
     def _ensure_dir(cls):

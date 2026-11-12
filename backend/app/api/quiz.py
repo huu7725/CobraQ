@@ -1,3 +1,5 @@
+from ..core.storage import question_path
+from ..core.config import data_path
 from fastapi import APIRouter, Header, Depends, HTTPException
 from pydantic import BaseModel
 import json, random, re
@@ -13,7 +15,7 @@ router = APIRouter(prefix="/quiz", tags=["quiz"])
 
 
 def user_dir(uid):
-    d = Path("data/users") / re.sub(r'[^\w]', '_', uid or "guest")
+    d = data_path("users") / re.sub(r'[^\w]', '_', uid or "guest")
     d.mkdir(parents=True, exist_ok=True)
     return d
 
@@ -61,20 +63,22 @@ def start_quiz(
                     if f["file_id"] == file_id:
                         group_settings = f
                         break
-                all_qs = load_json(user_dir(group["teacher_email"]) / f"{file_id}.json", [])
+                all_qs = load_json(question_path(user_dir(group["teacher_email"]), file_id), [])
             else:
-                all_qs = load_json(user_dir(uid) / f"{file_id}.json", [])
+                all_qs = load_json(question_path(user_dir(uid), file_id), [])
         else:
-            all_qs = load_json(user_dir(uid) / f"{file_id}.json", [])
+            all_qs = load_json(question_path(user_dir(uid), file_id), [])
     else:
         index = load_json(files_index_path(uid), {})
         all_qs = []
         for fid in index:
-            all_qs.extend(load_json(user_dir(uid) / f"{fid}.json", []))
+            all_qs.extend(load_json(question_path(user_dir(uid), fid), []))
 
-    valid = [q for q in all_qs if len(q.get("choices", [])) >= 2]
+    valid = [q for q in all_qs if len(q.get("choices", [])) >= 2
+             and q.get('answer') in {c.get('label') for c in q.get('choices',[])}
+             and not set(q.get('extraction_issues',[])) & {'missing_choices','duplicate_or_empty_choices','repeated_choice_label','conflicting_answers'}]
     if not valid:
-        raise HTTPException(status_code=404, detail="Không có câu hỏi")
+        raise HTTPException(status_code=422, detail="Chưa có câu đủ phương án và đáp án để chấm. Mở Xem và sửa để kiểm tra câu hỏi trước.")
 
     # Use group settings if available, otherwise use request params
     actual_num = group_settings.get("num_questions", num) if group_settings else num

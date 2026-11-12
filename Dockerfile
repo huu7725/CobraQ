@@ -18,6 +18,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy source
 COPY backend/ ./backend/
+COPY frontend/ ./frontend/
+COPY research/ ./research/
+COPY evaluation/ ./evaluation/
 COPY CobraQ_v3.html ./CobraQ_v3.html
 COPY cobraq_v4_map_test.html ./cobraq_v4_map_test.html
 COPY favicon.svg ./favicon.svg

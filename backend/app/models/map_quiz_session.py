@@ -2,7 +2,7 @@
 MapQuizSession model — tracks an AI-generated quiz session derived from map events.
 """
 from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, func
-from app.db.database import Base
+from ..db.database import Base
 
 
 class MapQuizSession(Base):

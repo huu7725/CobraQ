@@ -14,8 +14,8 @@ How to add a new entry:
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from app.db.database import SessionLocal
-from app.models.historical_event import HistoricalEvent
+from ..db.database import SessionLocal
+from ..models.historical_event import HistoricalEvent
 
 # Per-event verified YouTube embed URLs.
 # Each ID was checked live via YouTube oEmbed API AND the title matches the event.

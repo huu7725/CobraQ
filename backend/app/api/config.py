@@ -1,3 +1,4 @@
+from ..core.config import data_path
 from fastapi import APIRouter, HTTPException, Depends, Header
 from pydantic import BaseModel
 import json
@@ -9,7 +10,7 @@ from ..core.audit import audit_log, EventType
 
 router = APIRouter(prefix="/config", tags=["config"])
 
-CONFIG_FILE = Path("data/config.json")
+CONFIG_FILE = data_path("config.json")
 
 
 def load_config():
@@ -19,6 +20,9 @@ def load_config():
             cfg.update(json.loads(CONFIG_FILE.read_text(encoding="utf-8")))
     except:
         pass
+    from ..core.config import get_settings
+    if not get_settings().external_ai_enabled:
+        cfg["ai_parse_enabled"] = False
     return cfg
 
 
@@ -32,7 +36,7 @@ def get_config(current_user: Optional[dict] = Depends(get_current_user_optional)
     cfg = load_config()
     from ..core.config import get_settings
     settings = get_settings()
-    has_key = bool(settings.anthropic_api_key and settings.anthropic_api_key != "YOUR_KEY_HERE")
+    has_key = settings.cloud_ai_available
     return {
         "ai_parse_enabled": cfg.get("ai_parse_enabled", True),
         "has_api_key": has_key,
@@ -59,7 +63,7 @@ def get_ai_status(current_user: Optional[dict] = Depends(get_current_user_option
     cfg = load_config()
     from ..core.config import get_settings
     settings = get_settings()
-    has_key = bool(settings.anthropic_api_key and settings.anthropic_api_key != "YOUR_KEY_HERE")
+    has_key = settings.cloud_ai_available
     return {
         "ai_available": has_key,
         "ai_enabled": cfg.get("ai_parse_enabled", True),

@@ -10,7 +10,7 @@ from typing import Protocol
 
 from .aqg_prompt import ChatMessage, serialize_chat_messages
 
-from app.core.config import get_settings
+from ..core.config import get_settings
 
 
 class ModelBackendError(RuntimeError):

@@ -3,7 +3,7 @@ UserMapProgress model — tracks which historical events a user has viewed.
 This is the "learning memory" that powers the Map-based AI Quiz.
 """
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, func, UniqueConstraint
-from app.db.database import Base
+from ..db.database import Base
 
 
 class UserMapProgress(Base):

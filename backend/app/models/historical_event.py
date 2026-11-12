@@ -2,7 +2,7 @@
 Historical Event model — events displayed as markers on the interactive Vietnam map.
 """
 from sqlalchemy import Column, Integer, String, Float, Text, Boolean, Date, DateTime, ForeignKey, func, UniqueConstraint
-from app.db.database import Base
+from ..db.database import Base
 
 
 class HistoricalEvent(Base):

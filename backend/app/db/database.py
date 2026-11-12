@@ -31,14 +31,8 @@ def _resolve_database_url() -> str:
             url = "postgresql://" + url[len("postgres://"):]
         return url
 
-    # Fallback: SQLite relative to this file.
-    backend_root = Path(__file__).resolve().parents[2]  # .../backend
-    data_dir = os.environ.get("DATA_DIR")
-    if data_dir:
-        # DATA_DIR may be a persistent mount path; honour it.
-        db_path = Path(data_dir) / "cobraq.db"
-    else:
-        db_path = backend_root / "data" / "cobraq.db"
+    from ..core.config import data_path
+    db_path = data_path("cobraq.db")
     db_path.parent.mkdir(parents=True, exist_ok=True)
     return "sqlite:///" + db_path.as_posix()
 

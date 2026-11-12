@@ -66,3 +66,36 @@ outputs/
 
 # Data test folder
 data test/
+
+venv2/
+venv/
+__pycache__/
+.venv/
+.sandbox/
+.sandboxes/
+.env
+.env.*
+!.env.example
+!backend/.env.example
+node_modules/
+*.py[cod]
+*.log
+*.tmp
+.pytest_cache/
+backend/data/
+data/
+data test/
+file báo cáo/
+output/
+outputs/
+tmp/
+artifacts/
+models/
+GUI_GIAO_VIEN.zip
+research/sources/*.pdf
+backend/*resp*.json
+backend/test_*.json
+
+!tools/tests/test_*.py
+!research/tests/test_*.py
+!research/verify_adapter_recovered.py

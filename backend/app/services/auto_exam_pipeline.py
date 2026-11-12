@@ -10,7 +10,7 @@ from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, Field, ValidationError
 
-from app.core.config import get_settings
+from ..core.config import get_settings
 from .aqg_prompt import PROMPT_CONTRACT_VERSION, ChatMessage, build_aqg_messages
 from .experiment_config import DEFAULT_PATH, ExperimentCondition, load_experiment_config
 from .model_provider import ModelBackendError, create_backend

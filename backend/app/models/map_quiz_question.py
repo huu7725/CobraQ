@@ -2,7 +2,7 @@
 MapQuizQuestion model — individual question within a map quiz session.
 """
 from sqlalchemy import Column, Integer, String, Text, ForeignKey, DateTime, func
-from app.db.database import Base
+from ..db.database import Base
 
 
 class MapQuizQuestion(Base):

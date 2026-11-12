@@ -1,0 +1,87 @@
+[
+  {
+    "id": 1,
+    "title": "Liên hợp quốc",
+    "topic_id": 1
+  },
+  {
+    "id": 2,
+    "title": "Trật tự thế giới trong Chiến tranh lạnh",
+    "topic_id": 1
+  },
+  {
+    "id": 3,
+    "title": "Trật tự thế giới sau Chiến tranh lạnh",
+    "topic_id": 1
+  },
+  {
+    "id": 4,
+    "title": "Sự ra đời và phát triển của Hiệp hội các quốc gia Đông Nam Á (ASEAN)",
+    "topic_id": 2
+  },
+  {
+    "id": 5,
+    "title": "Cộng đồng ASEAN: Từ ý tưởng đến hiện thực",
+    "topic_id": 2
+  },
+  {
+    "id": 6,
+    "title": "Cách mạng tháng Tám năm 1945",
+    "topic_id": 3
+  },
+  {
+    "id": 7,
+    "title": "Cuộc kháng chiến chống thực dân Pháp (1945-1954)",
+    "topic_id": 3
+  },
+  {
+    "id": 8,
+    "title": "Cuộc kháng chiến chống Mỹ, cứu nước (1954-1975)",
+    "topic_id": 3
+  },
+  {
+    "id": 9,
+    "title": "Cuộc đấu tranh bảo vệ Tổ quốc từ sau tháng 4-1975 đến nay và một số bài học lịch sử",
+    "topic_id": 3
+  },
+  {
+    "id": 10,
+    "title": "Khái quát về công cuộc Đổi mới từ năm 1986 đến nay",
+    "topic_id": 4
+  },
+  {
+    "id": 11,
+    "title": "Thành tựu cơ bản và bài học của công cuộc Đổi mới ở Việt Nam từ năm 1986 đến nay",
+    "topic_id": 4
+  },
+  {
+    "id": 12,
+    "title": "Hoạt động đối ngoại của Việt Nam trong đấu tranh giành độc lập dân tộc",
+    "topic_id": 5
+  },
+  {
+    "id": 13,
+    "title": "Hoạt động đối ngoại của Việt Nam trong kháng chiến chống Pháp và kháng chiến chống Mỹ",
+    "topic_id": 5
+  },
+  {
+    "id": 14,
+    "title": "Hoạt động đối ngoại của Việt Nam từ năm 1975 đến nay",
+    "topic_id": 5
+  },
+  {
+    "id": 15,
+    "title": "Khái quát cuộc đời và sự nghiệp của Hồ Chí Minh",
+    "topic_id": 6
+  },
+  {
+    "id": 16,
+    "title": "Hồ Chí Minh - Anh hùng giải phóng dân tộc",
+    "topic_id": 6
+  },
+  {
+    "id": 17,
+    "title": "Dấu ấn Hồ Chí Minh trong lòng nhân dân thế giới và Việt Nam",
+    "topic_id": 6
+  }
+]

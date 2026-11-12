@@ -1,29 +1,10 @@
-import sys
-import os
+"""Create an admin using explicit environment configuration; never print credentials."""
 from pathlib import Path
-sys.path.insert(0, str(Path(__file__).parent))
-
-from app.core.security import hash_password
-from app.db.user_store import user_store
-from app.core.audit import audit_log, EventType
-from app.core.config import get_settings
-
-settings = get_settings()
-email = os.getenv("ADMIN_EMAIL") or "admin@example.com"
-password = os.getenv("ADMIN_PASSWORD") or "admin123"
-name = "Admin"
-role = "admin"
-
-if not user_store.user_exists(email):
-    pw_hash = hash_password(password)
-    user_store.create_user(email, name, pw_hash, role)
-    audit_log.log(EventType.AUTH_REGISTER, user_id=email, role=role)
-    print(f"Created admin: {email}")
-else:
-    # Update role to admin
-    user = user_store.get_user(email)
-    user["role"] = "admin"
-    user_store.save()
-    print(f"Updated {email} to admin role")
-
-print(f"Login: {email} / {password}")
+import sys
+sys.path.insert(0,str(Path(__file__).parent))
+from dotenv import load_dotenv
+load_dotenv(Path(__file__).parent / ".env")
+from app.services.seed_admin import seed_admin
+if __name__ == "__main__":
+    email=seed_admin()
+    print("Admin configuration applied." if email else "Set ADMIN_EMAIL and ADMIN_PASSWORD before running this command.")

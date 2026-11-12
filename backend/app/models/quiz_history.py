@@ -2,7 +2,7 @@
 QuizHistory model — unified quiz history for both map and document quiz types.
 """
 from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, func
-from app.db.database import Base
+from ..db.database import Base
 
 
 class QuizHistory(Base):

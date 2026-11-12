@@ -1,3 +1,4 @@
+from ..core.config import data_path
 """
 Groups API — lớp học: GV tạo nhóm, chia sẻ mã, HS tham gia.
 """
@@ -14,7 +15,7 @@ from pathlib import Path
 
 
 def user_dir(uid):
-    d = Path("data/users") / re.sub(r"[^\w]", "_", uid or "guest")
+    d = data_path("users") / re.sub(r"[^\w]", "_", uid or "guest")
     d.mkdir(parents=True, exist_ok=True)
     return d
 

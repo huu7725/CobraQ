@@ -1,98 +1,42 @@
-import os
-from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.staticfiles import StaticFiles
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from pathlib import Path
+from contextlib import asynccontextmanager
+from .core.config import get_settings, data_path
 
 from .api.router import api_router
 
 _root = Path(__file__).resolve().parent.parent.parent
 FRONTEND_PATH = _root / "CobraQ_v3.html"
+DATA_ROOT = data_path()
+DATA_ROOT.mkdir(parents=True, exist_ok=True)
 
-# Resolve data dir: respect DATA_DIR env (Render Persistent Disk mounts at
-# e.g. /var/data). Falls back to <repo>/backend/data for local dev.
-# On Render free tier the disk is ephemeral — without a Persistent Disk
-# attached, $DATA_DIR must be set to a path Render guarantees to retain.
-_env_data_dir = os.environ.get("DATA_DIR", "").strip()
-if _env_data_dir:
-    _target = Path(_env_data_dir)
-    _target.mkdir(parents=True, exist_ok=True)
-else:
-    _target = _root / "data"
-
-# Make code that uses bare Path("data/...") work regardless of whether the
-# data dir is local or on a persistent disk. We symlink <repo>/backend/data
-# to the resolved target when they differ — that way every existing file
-# (group_scores.json, users_store.json, chroma_db/, ...) keeps working
-# without refactoring each call site.
-DATA_ROOT = _root / "data"
-_local_data = _root / "data"
-if _env_data_dir and _target.resolve() != _local_data.resolve():
-    # Ensure expected subdirs exist on the mount, then symlink the
-    # in-repo `data/` to the mount path. This way call sites that use
-    # bare `Path("data/...")` continue to work without code changes.
-    for sub in ("users", "uploads", "chroma_db"):
-        (_target / sub).mkdir(parents=True, exist_ok=True)
-
-    # Remove existing real dir or stale symlink before linking.
-    if _local_data.is_symlink() or _local_data.exists():
-        # If it's a real dir, keep its files but only if DATA_DIR is unset;
-        # since we're here DATA_DIR is set, so wipe the local copy — the
-        # symlink will replace it.
-        if _local_data.is_symlink() or _local_data.is_file():
-            _local_data.unlink()
-        else:
-            # Real directory. Remove it entirely; all data must live on
-            # the persistent disk from now on.
-            import shutil as _shutil
-            _shutil.rmtree(_local_data)
-    _local_data.symlink_to(_target, target_is_directory=True)
-else:
-    DATA_ROOT.mkdir(exist_ok=True)
+limiter = Limiter(key_func=get_remote_address)
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
-    """Startup: create tables + seed historical events (idempotent)."""
-    try:
-        from .db.database import Base, engine, DATABASE_URL
-        from .models import historical_event, map_quiz_question, map_quiz_session, map_quiz_answer, user_map_progress, user, quiz_history  # noqa: F401
+async def lifespan(application):
+    from .services.document_store import document_jobs
+    import asyncio
+    jobs=document_jobs()
+    if get_settings().profile != "sandbox":
+        from .db.database import Base, engine
+        from .models import historical_event, map_quiz_question, map_quiz_session, map_quiz_answer, user_map_progress, user, quiz_history
         Base.metadata.create_all(bind=engine)
-        # Don't print the full URL — it contains the password. Print the host only.
-        host = "sqlite"
-        try:
-            from urllib.parse import urlparse
-            host = urlparse(DATABASE_URL).hostname or "sqlite"
-        except Exception:
-            pass
-        print(f"[startup] DB ready, host={host}", flush=True)
-    except Exception as e:
-        print(f"[startup] init_db failed: {e}", flush=True)
-
-    try:
         from .services.seed_map_data import seed_events
         seed_events()
-    except Exception as e:
-        print(f"[startup] seed_events failed: {e}", flush=True)
-
-    # Seed the first admin from ADMIN_EMAIL / ADMIN_PASSWORD env vars.
-    # Idempotent: if an admin with that email already exists, this only
-    # refreshes the password hash and re-asserts the role. See
-    # backend/app/services/seed_admin.py for the rationale.
-    try:
         from .services.seed_admin import seed_admin
         seed_admin()
-    except Exception as e:
-        print(f"[startup] seed_admin failed: {e}", flush=True)
-
     yield
-
-
-limiter = Limiter(key_func=get_remote_address)
+    await asyncio.to_thread(jobs.close)
+    document_jobs.cache_clear()
+    from .db.database import engine
+    engine.dispose()
 
 app = FastAPI(
     title="CobraQ API",
@@ -106,7 +50,8 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[] if get_settings().profile == "sandbox" else ["*"],
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:[0-9]+)?$" if get_settings().profile == "sandbox" else None,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -117,18 +62,10 @@ app.include_router(api_router, prefix="/api")
 @app.get("/")
 def root():
     if FRONTEND_PATH.exists():
-        return FileResponse(
-            FRONTEND_PATH,
-            headers={
-                "Cache-Control": "no-cache, no-store, must-revalidate",
-                "Pragma": "no-cache",
-                "Expires": "0",
-                # Required so YouTube iframe embeds work — without this, YouTube
-                # returns "Error 153: Video player configuration error"
-                # because the browser does not send a Referer for cross-origin embeds.
-                "Referrer-Policy": "strict-origin-when-cross-origin",
-            },
-        )
+        if get_settings().profile == "sandbox":
+            html = FRONTEND_PATH.read_text(encoding="utf-8").replace("<body>", '<body><div id="sandbox-banner" role="status" style="position:fixed;top:6px;right:12px;z-index:250;background:#fef3c7;color:#78350f;padding:5px 12px;border:1px solid #f59e0b;border-radius:8px;font:600 12px sans-serif">SANDBOX · Dữ liệu thử nghiệm</div><style>.main{padding-top:52px}</style>', 1)
+            return HTMLResponse(html, headers={"Cache-Control": "no-store", "X-CobraQ-Environment": "sandbox"})
+        return FileResponse(FRONTEND_PATH, headers={"Cache-Control": "no-cache, no-store, must-revalidate", "Pragma": "no-cache", "Expires": "0"})
     return {
         "name": "CobraQ API",
         "version": "3.0.0",
@@ -139,22 +76,30 @@ def root():
 
 @app.get("/map")
 def map_page():
-    """Serve the v4 map test page so YouTube embeds work over HTTP (not file://)."""
-    p = _root / "cobraq_v4_map_test.html"
-    if p.exists():
-        return FileResponse(
-            p,
-            headers={
-                "Cache-Control": "no-cache, no-store, must-revalidate",
-                "Referrer-Policy": "strict-origin-when-cross-origin",
-            },
-        )
-    return {"error": "map page not found"}
+    return FileResponse(_root / "cobraq_v4_map_test.html", headers={"Referrer-Policy":"strict-origin-when-cross-origin"})
+
+
+@app.get("/assets/history12/page/{page_number}")
+def history12_page(page_number: int):
+    from fastapi import HTTPException
+    if not 1 <= page_number <= 200:
+        raise HTTPException(404,"Trang khong hop le")
+    path = _root / "outputs/cobraq_ocr_review/pages" / f"page_{page_number:03d}.jpg"
+    if not path.is_file():
+        raise HTTPException(404,"Chua co anh trang sach")
+    return FileResponse(path,media_type="image/jpeg")
 
 
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    return {"status": "ok", "profile": get_settings().profile,
+            "external_ai_enabled": get_settings().external_ai_enabled}
+
+
+@app.get("/research-ui.js", include_in_schema=False)
+def research_ui():
+    return FileResponse(_root / "frontend/research.js", media_type="text/javascript",
+                        headers={"Cache-Control": "no-cache"})
 
 
 @app.get("/favicon.ico")
@@ -162,24 +107,7 @@ def favicon():
     return FileResponse(_root / "favicon.svg", media_type="image/svg+xml")
 
 
-@app.get("/assets/history12/page/{page_number}")
-def history12_page(page_number: int):
-    """Serve a reviewed textbook page image for source inspection."""
-    if not 1 <= page_number <= 200:
-        from fastapi import HTTPException
-        raise HTTPException(404, "Trang sách không hợp lệ")
-    page_path = (
-        _root / "outputs" / "cobraq_ocr_review" / "pages"
-        / f"page_{page_number:03d}.jpg"
-    )
-    if not page_path.is_file():
-        from fastapi import HTTPException
-        raise HTTPException(404, "Không có ảnh trang sách này")
-    return FileResponse(
-        page_path,
-        media_type="image/jpeg",
-        headers={"Cache-Control": "public, max-age=3600"},
-    )
+app.mount("/assets", StaticFiles(directory=_root / "frontend"), name="frontend-assets")
 
 
 if __name__ == "__main__":
